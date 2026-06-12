@@ -15,9 +15,17 @@
   // ─── Sound Synthesizer (Web Audio API) ────────────────────
   const RetroAudio = {
     ctx: null,
+    canPlayAudio() {
+      return navigator.userActivation && navigator.userActivation.hasBeenActive;
+    },
     getOrCreateCtx() {
+      if (!this.canPlayAudio()) return null;
       if (!this.ctx) {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      // Attempt to resume if suspended
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
       }
       return this.ctx;
     },
@@ -30,33 +38,37 @@
       }
     },
     async playSelection() {
-      if (!await this.isEnabled()) return;
+      if (!this.canPlayAudio() || !await this.isEnabled()) return;
       const ctx = this.getOrCreateCtx();
+      if (!ctx) return;
       const now = ctx.currentTime;
       this._playNote(523.25, now, 0.08, 'square');
       this._playNote(659.25, now + 0.08, 0.08, 'square');
       this._playNote(783.99, now + 0.16, 0.16, 'square');
     },
     async playAction(type) {
-      if (!await this.isEnabled()) return;
+      if (!this.canPlayAudio() || !await this.isEnabled()) return;
       const ctx = this.getOrCreateCtx();
+      if (!ctx) return;
       const now = ctx.currentTime;
       
       if (type === 'hide' || type === 'erase') {
         this._playNote(880, now, 0.04, 'triangle');
         this._playNote(440, now + 0.04, 0.04, 'triangle');
       } else if (type === 'stretch') {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(300, now);
-        osc.frequency.exponentialRampToValueAtTime(800, now + 0.25);
-        gain.gain.setValueAtTime(0.04, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.25);
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.exponentialRampToValueAtTime(800, now + 0.25);
+          gain.gain.setValueAtTime(0.04, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        } catch (e) {}
       } else if (type === 'reset') {
         this._playNote(523.25, now, 0.06, 'sawtooth');
         this._playNote(392.00, now + 0.06, 0.06, 'sawtooth');
@@ -64,8 +76,10 @@
       }
     },
     _playNote(freq, start, duration, type = 'sine') {
+      if (!this.canPlayAudio()) return;
       try {
         const ctx = this.getOrCreateCtx();
+        if (!ctx) return;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = type;
@@ -82,15 +96,17 @@
       await this.playAction('reset');
     },
     async playChomp() {
-      if (!await this.isEnabled()) return;
+      if (!this.canPlayAudio() || !await this.isEnabled()) return;
       const ctx = this.getOrCreateCtx();
+      if (!ctx) return;
       const now = ctx.currentTime;
       this._playNote(120, now, 0.05, 'sawtooth');
       this._playNote(90, now + 0.08, 0.08, 'sawtooth');
     },
     async playSwish() {
-      if (!await this.isEnabled()) return;
+      if (!this.canPlayAudio() || !await this.isEnabled()) return;
       const ctx = this.getOrCreateCtx();
+      if (!ctx) return;
       const now = ctx.currentTime;
       try {
         const osc = ctx.createOscillator();
@@ -1059,7 +1075,7 @@
       canvas.height = window.innerHeight;
       document.body.appendChild(canvas);
 
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
@@ -1108,7 +1124,7 @@
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
+        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
         tempCtx.drawImage(canvas, 0, 0);
 
         canvas.width = window.innerWidth;
