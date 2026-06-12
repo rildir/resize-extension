@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=300" />
+    <title>PageEraser.exe</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="window">
+      <!-- Title Bar -->
+      <div class="title-bar">
+        <div class="title-bar-text">PageEraser.exe</div>
+        <div class="title-bar-controls">
+          <button
+            aria-label="Minimize"
+            class="win-btn-control minimize-btn"
+            type="button"
+          ></button>
+          <button
+            aria-label="Maximize"
+            class="win-btn-control maximize-btn"
+            type="button"
+          ></button>
+          <button
+            aria-label="Close"
+            class="win-btn-control close-btn"
+            type="button"
+          ></button>
+        </div>
+      </div>
+
+      <!-- Menu Bar with Dropdowns -->
+      <div class="menu-bar">
+        <div class="menu-item-container">
+          <div class="menu-item" id="menu-file" data-i18n="fileMenu">
+            <span class="underline">F</span>ile
+          </div>
+          <div class="dropdown-menu" id="dropdown-file">
+            <div
+              class="dropdown-item"
+              id="menu-item-export"
+              data-i18n="exportRules"
+            >
+              Export Rules...
+            </div>
+            <div
+              class="dropdown-item"
+              id="menu-item-import"
+              data-i18n="importRules"
+            >
+              Import Rules...
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" id="menu-item-exit" data-i18n="exit">
+              Exit
+            </div>
+          </div>
+        </div>
+        <div class="menu-item-container">
+          <div class="menu-item" id="menu-actions" data-i18n="actionsMenu">
+            <span class="underline">A</span>ctions
+          </div>
+          <div class="dropdown-menu" id="dropdown-actions">
+            <div
+              class="dropdown-item"
+              id="menu-item-select"
+            >
+              <span data-i18n="startSelection">Start Selection</span>
+              <span class="menu-shortcut">Ctrl+Shift+E</span>
+            </div>
+            <div
+              class="dropdown-item"
+              id="menu-item-reset"
+            >
+              <span data-i18n="restoreLayout">Restore All Layout</span>
+              <span class="menu-shortcut">Ctrl+Shift+Y</span>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div
+              class="dropdown-item"
+              id="menu-item-paint"
+            >
+              <span data-i18n="paintWebpage">Paint Webpage</span>
+              <span class="menu-shortcut">Ctrl+Shift+K</span>
+            </div>
+          </div>
+        </div>
+        <div class="menu-item-container">
+          <div class="menu-item" id="menu-options" data-i18n="optionsMenu">
+            <span class="underline">O</span>ptions
+          </div>
+          <div class="dropdown-menu" id="dropdown-options">
+            <div class="dropdown-item checkable checked" id="menu-item-sounds">
+              <span class="check-mark">✓</span>
+              <span data-i18n="playSounds">Play Retro Sounds</span>
+            </div>
+            <div
+              class="dropdown-item checkable checked"
+              id="menu-item-clippy-toggle"
+            >
+              <span class="check-mark">✓</span>
+              <span data-i18n="showClippy">Show Clippy Buddy</span>
+            </div>
+            <div class="dropdown-item checkable" id="menu-item-scope">
+              <span class="check-mark">✓</span>
+              <span data-i18n="allSubdomains">Apply to Subdomains</span>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item checkable" id="menu-item-theme-teal">
+              <span class="check-mark">✓</span>
+              <span data-i18n="classicTeal">Classic Teal</span>
+            </div>
+            <div class="dropdown-item checkable" id="menu-item-theme-blue">
+              <span class="check-mark">✓</span>
+              <span data-i18n="classicBlue">Classic Blue</span>
+            </div>
+            <div class="dropdown-item checkable" id="menu-item-theme-plum">
+              <span class="check-mark">✓</span>
+              <span data-i18n="plumTheme">Plum Theme</span>
+            </div>
+            <div class="dropdown-item checkable" id="menu-item-contrast-high">
+              <span class="check-mark">✓</span>
+              <span data-i18n="contrastHigh">High Contrast</span>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item checkable" id="menu-item-text-large">
+              <span class="check-mark">✓</span>
+              <span data-i18n="textLarge">Large Text</span>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item checkable" id="menu-item-lang-en">
+              <span class="check-mark">✓</span> English
+            </div>
+            <div class="dropdown-item checkable" id="menu-item-lang-tr">
+              <span class="check-mark">✓</span> Türkçe
+            </div>
+          </div>
+        </div>
+        <div class="menu-item-container">
+          <div class="menu-item" id="menu-help" data-i18n="helpMenu">
+            <span class="underline">H</span>elp
+          </div>
+          <div class="dropdown-menu" id="dropdown-help">
+            <div class="dropdown-item" id="menu-item-tour" data-i18n="takeTour">
+              Take Guided Tour...
+            </div>
+            <div
+              class="dropdown-item"
+              id="menu-item-clippy-trigger"
+              data-i18n="askClippy"
+            >
+              Ask Clippy...
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" id="menu-item-soundboard" data-i18n="soundboardMenu">
+              Soundboard...
+            </div>
+            <div class="dropdown-divider"></div>
+            <div
+              class="dropdown-item"
+              id="menu-item-about"
+              data-i18n="aboutPageEraser"
+            >
+              About PageEraser...
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="window-body">
+        <!-- Active Site Panel -->
+        <div class="field-row">
+          <span class="field-label" data-i18n="activeSite">Active Site:</span>
+          <div class="field-value-sunken" id="domain-name">Loading...</div>
+        </div>
+
+        <!-- Action Select Trigger & Persist Checkbox -->
+        <div style="display: flex; gap: 8px; align-items: center; width: 100%">
+          <button
+            class="win-btn win-btn-primary"
+            id="btn-select"
+            type="button"
+            style="flex: 1"
+          >
+            <span data-i18n="selectElement">Select Element to Erase</span>
+          </button>
+          <div
+            style="display: flex; align-items: center; gap: 4px; padding: 2px"
+          >
+            <input
+              type="checkbox"
+              id="chk-persist"
+              checked
+              style="cursor: pointer; width: 12px; height: 12px"
+            />
+            <label
+              for="chk-persist"
+              data-i18n="persistLabel"
+              style="font-weight: bold; cursor: pointer; user-select: none"
+              >Persist</label
+            >
+          </div>
+        </div>
+
+        <!-- Modified Elements sunken panel with search filter -->
+        <div class="list-section">
+          <div class="list-title-row">
+            <span class="list-title" data-i18n="modifiedElements"
+              >Modified Elements:</span
+            >
+            <div class="filter-row">
+              <span class="filter-label" data-i18n="filterLabel">Filter:</span>
+              <input
+                class="win-input"
+                type="text"
+                id="filter-input"
+                data-i18n-placeholder="searchPlaceholder"
+                placeholder="Search..."
+                autocomplete="off"
+              />
+            </div>
+          </div>
+          <div class="sunken-panel" id="selectors-list">
+            <div class="empty-state" data-i18n="noElements">
+              No elements modified.
+            </div>
+          </div>
+        </div>
+
+        <!-- Reset Layout Button & Recycle Bin -->
+        <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px; width: 100%">
+          <button class="win-btn" id="btn-reset" type="button" style="flex: 1; height: 32px;" disabled>
+            <span data-i18n="restoreLayout">Restore All Layout</span>
+          </button>
+          <div id="recycle-bin-container" class="win-recycle-bin" title="Drag elements here to restore them, or double-click to restore all">
+            <div class="recycle-bin-icon empty" id="recycle-bin-icon"></div>
+            <span class="recycle-bin-label" data-i18n="recycleBinLabel">Recycle Bin</span>
+          </div>
+        </div>
+
+        <!-- Keyboard Shortcuts fieldset -->
+        <fieldset class="win-fieldset">
+          <legend class="win-legend" data-i18n="shortcutsTitle">
+            Keyboard Shortcuts
+          </legend>
+
+          <div
+            class="shortcut-subtitle"
+            style="margin-top: 0"
+            data-i18n="inSelection"
+          >
+            In Selection Mode
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">↑</span>
+            <span class="shortcut-desc" data-i18n="selectParent"
+              >Select Parent Container</span
+            >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">↓</span>
+            <span class="key-desc" data-i18n="selectChild"
+              >Select Child Element</span
+            >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Alt+Click</span>
+            <span class="key-desc" data-i18n="stretchWidth"
+              >Stretch to Full Width</span
+            >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">ESC</span>
+            <span class="key-desc" data-i18n="cancelSelection"
+              >Cancel Selection</span
+            >
+          </div>
+
+          <div class="shortcut-subtitle" data-i18n="globalKeys">
+            Global Keys
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Ctrl+Shift+E</span>
+            <span class="key-desc" data-i18n="toggleSelection"
+              >Toggle Selection Mode</span
+            >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Ctrl+Shift+Y</span>
+            <span class="key-desc" data-i18n="restoreLayout"
+              >Restore All Layout</span
+            >
+          </div>
+        </fieldset>
+
+        <!-- Clippy Buddy (Contextual Floating Mascot) -->
+        <div class="win-clippy-buddy" id="clippy-buddy">
+          <div class="clippy-bubble" id="clippy-bubble">
+            <div id="clippy-text">Welcome!</div>
+          </div>
+          <div class="clippy-sprite" id="clippy-click-target">
+            <div class="clippy-paperclip">
+              <div class="clippy-eye left"></div>
+              <div class="clippy-eye right"></div>
+              <div class="clippy-mouth"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+          <div class="status-bar-field">
+            <span data-i18n="rulesLabel">Rules:</span>
+            <span id="hidden-count">0</span>
+          </div>
+          <div class="status-bar-field text-right" id="status-clock">00:00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden backup file input -->
+    <input
+      type="file"
+      id="import-file-input"
+      style="display: none"
+      accept=".json"
+    />
+
+    <!-- Modal Dialog (About PageEraser) -->
+    <div class="win-modal-overlay" id="about-overlay" style="display: none">
+      <div class="win-modal">
+        <div class="title-bar">
+          <div class="title-bar-text" data-i18n="aboutTitle">
+            About PageEraser
+          </div>
+          <div class="title-bar-controls">
+            <button
+              aria-label="Close"
+              class="win-btn-control close-btn"
+              id="btn-close-about"
+              type="button"
+            ></button>
+          </div>
+        </div>
+        <div class="win-modal-body">
+          <div class="about-logo-container">
+            <div class="retro-computer-icon">
+              <div class="monitor-outer">
+                <div class="monitor-inner">
+                  <div class="monitor-screen" id="easter-egg-screen"></div>
+                </div>
+              </div>
+              <div class="stand"></div>
+              <div class="keyboard"></div>
+            </div>
+          </div>
+          <div class="about-text-container">
+            <div class="about-title">PageEraser.exe</div>
+            <div class="about-version" data-i18n="aboutVersion">
+              Version 1.5.0 (Retro Edition)
+            </div>
+            <div class="about-copyright" data-i18n="copyright">
+              Copyright © 1995-2026 Retro Systems Corp.
+            </div>
+            <div class="about-credits" data-i18n="credits">
+              Designed with nostalgia.
+            </div>
+            <div class="about-divider"></div>
+            <div class="developer-info">
+              <div class="dev-name">
+                <span data-i18n="developer">Developers:</span> Recep Ildır &
+                Ecem Artut
+              </div>
+              <div class="dev-links">
+                <strong>Recep:</strong>
+                <a
+                  href="https://github.com/rildir"
+                  target="_blank"
+                  class="win-link"
+                  >GitHub</a
+                >
+                |
+                <a
+                  href="https://www.linkedin.com/in/recep-ildir/"
+                  target="_blank"
+                  class="win-link"
+                  >LinkedIn</a
+                >
+              </div>
+              <div class="dev-links" style="margin-top: 3px">
+                <strong>Ecem:</strong>
+                <a
+                  href="https://www.linkedin.com/in/ecemartut/"
+                  target="_blank"
+                  class="win-link"
+                  >LinkedIn</a
+                >
+              </div>
+            </div>
+          </div>
+          <div class="about-footer">
+            <button class="win-btn win-btn-ok" id="btn-ok-about" type="button">
+              <span data-i18n="okBtn">OK</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Dialog (Alert) -->
+    <div
+      class="win-modal-overlay"
+      id="alert-overlay"
+      style="display: none; z-index: 10000"
+    >
+      <div class="win-modal" style="min-width: 250px; max-width: 300px">
+        <div class="title-bar">
+          <div class="title-bar-text" id="alert-title">PageEraser</div>
+          <div class="title-bar-controls">
+            <button
+              aria-label="Close"
+              class="win-btn-control close-btn"
+              id="btn-close-alert"
+              type="button"
+            ></button>
+          </div>
+        </div>
+        <div class="win-modal-body" style="padding: 16px">
+          <div
+            class="alert-text-container"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              margin-bottom: 20px;
+            "
+          >
+            <!-- Using standard Unicode symbols as retro icons -->
+            <div id="alert-icon" style="font-size: 32px; line-height: 1">
+              ℹ️
+            </div>
+            <div
+              class="alert-message"
+              id="alert-message"
+              style="font-size: 12px; line-height: 1.4"
+            >
+              Action completed.
+            </div>
+          </div>
+          <div
+            class="alert-footer"
+            style="display: flex; justify-content: center"
+          >
+            <button
+              class="win-btn win-btn-ok"
+              id="btn-ok-alert"
+              type="button"
+              style="width: 80px"
+            >
+              <span data-i18n="okBtn">OK</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Dialog (Minesweeper) -->
+    <div
+      class="win-modal-overlay"
+      id="minesweeper-overlay"
+      style="display: none"
+    >
+      <div class="win-modal" style="width: 162px">
+        <div class="title-bar">
+          <div class="title-bar-text">Minesweeper</div>
+          <div class="title-bar-controls">
+            <button
+              aria-label="Close"
+              class="win-btn-control close-btn"
+              id="btn-close-minesweeper"
+              type="button"
+            ></button>
+          </div>
+        </div>
+        <div
+          class="win-modal-body"
+          style="padding: 6px; gap: 6px; background: #c0c0c0"
+        >
+          <div class="minesweeper-dashboard">
+            <div class="minesweeper-counter" id="minesweeper-count">010</div>
+            <button
+              class="win-btn face-btn"
+              id="minesweeper-face-btn"
+              type="button"
+            >
+              🙂
+            </button>
+            <div class="minesweeper-counter" id="minesweeper-time">000</div>
+          </div>
+          <div class="minesweeper-grid-sunken">
+            <div class="minesweeper-grid" id="minesweeper-grid"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spotlight Tour -->
+    <div id="tour-overlay" class="win-tour-overlay" style="display: none">
+      <div id="tour-spotlight" class="win-tour-spotlight"></div>
+      <div id="tour-tooltip" class="win-tour-tooltip">
+        <div class="tour-tooltip-body">
+          <div class="tour-tooltip-step" id="tour-step-text">
+            Step text goes here...
+          </div>
+        </div>
+        <div class="tour-tooltip-footer">
+          <button class="win-btn tour-btn" id="btn-tour-skip" type="button">
+            <span data-i18n="skip">Skip</span>
+          </button>
+          <div class="tour-nav-buttons">
+            <button class="win-btn tour-btn" id="btn-tour-prev" type="button">
+              <span data-i18n="back">&lt; Back</span>
+            </button>
+            <span class="tour-progress" id="tour-progress">1/7</span>
+            <button class="win-btn tour-btn" id="btn-tour-next" type="button">
+              <span data-i18n="next">Next &gt;</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Soundboard Dialog (Multimedia Control) -->
+    <div id="overlay-soundboard" class="win-overlay" style="display: none">
+      <div class="window win-modal" id="modal-soundboard" style="width: 320px">
+        <div class="title-bar">
+          <div class="title-bar-text" data-i18n="soundboardTitle">Sound Properties</div>
+          <div class="title-bar-controls">
+            <button class="win-btn-control close-btn" id="btn-close-soundboard" aria-label="Close"></button>
+          </div>
+        </div>
+        <div class="window-body">
+          <p style="margin-top: 0;" data-i18n="soundboardIntro">Select a sound event to preview:</p>
+          <div class="sunken-panel" style="height: 120px; overflow-y: auto; background: #fff; padding: 2px;">
+            <div class="sound-event-item active" data-sound="startup">
+              🔊 <span data-i18n="soundStartup">Windows 95 Startup</span>
+            </div>
+            <div class="sound-event-item" data-sound="shutdown">
+              🔊 <span data-i18n="soundShutdown">Windows 95 Shutdown</span>
+            </div>
+            <div class="sound-event-item" data-sound="chord">
+              🔊 <span data-i18n="soundChord">Error Chord</span>
+            </div>
+            <div class="sound-event-item" data-sound="error">
+              🔊 <span data-i18n="soundDing">System Ding</span>
+            </div>
+            <div class="sound-event-item" data-sound="selection">
+              🔊 <span data-i18n="soundSelect">Element Highlight</span>
+            </div>
+            <div class="sound-event-item" data-sound="chomp">
+              🔊 <span data-i18n="soundChomp">Clippy Munch</span>
+            </div>
+            <div class="sound-event-item" data-sound="trash">
+              🔊 <span data-i18n="soundTrash">Recycle Bin</span>
+            </div>
+            <div class="sound-event-item" data-sound="swish">
+              🔊 <span data-i18n="soundSwish">Paint Brush</span>
+            </div>
+          </div>
+          <div class="field-row" style="justify-content: flex-end; margin-top: 10px; gap: 8px;">
+            <button class="win-btn" id="btn-play-soundboard" style="min-width: 60px;">
+              ▶ <span data-i18n="soundPlay">Play</span>
+            </button>
+            <button class="win-btn" id="btn-ok-soundboard" style="min-width: 60px;">
+              <span data-i18n="okBtn">OK</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blue Screen of Death (BSOD) Overlay -->
+    <div id="bsod-overlay" style="display: none;">
+      <div class="bsod-content">
+        <div class="bsod-header">Windows</div>
+        <p>A fatal exception 0E has occurred at 0028:C0011A95 in VxD PageEraser(01) + 0000A115. The current webpage contains too many distracting elements, causing a severe layout headache.</p>
+        <p>System stability has been temporarily compromised.</p>
+        <ul>
+          <li>Press ENTER to restore all site elements to original layout.</li>
+          <li>Press ESC to restart the PageEraser extension application.</li>
+        </ul>
+        <p>Press any other key to attempt to continue. If you do, you might get lost in advertising clutter.</p>
+        <p style="text-align: center; margin-top: 30px;">Press any key to continue _</p>
+      </div>
+    </div>
+
+    <script>
+      // Mock chrome extension APIs if running outside extension context
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.storage) {
+        window.chrome = {
+          runtime: {
+            id: "mock-extension-id",
+            sendMessage: function(message, callback) {
+              console.log("Mock sendMessage called:", message);
+              if (callback) setTimeout(() => callback({ success: true }), 0);
+            },
+            onMessage: {
+              addListener: function(listener) {
+                console.log("Mock onMessage.addListener called");
+              },
+              removeListener: function(listener) {
+                console.log("Mock onMessage.removeListener called");
+              }
+            },
+            lastError: null
+          },
+          storage: {
+            local: {
+              get: function(keys, callback) {
+                return new Promise((resolve) => {
+                  let result = {};
+                  if (keys === null) {
+                    for (let i = 0; i < localStorage.length; i++) {
+                      const k = localStorage.key(i);
+                      try {
+                        result[k] = JSON.parse(localStorage.getItem(k));
+                      } catch {
+                        result[k] = localStorage.getItem(k);
+                      }
+                    }
+                  } else if (typeof keys === 'string') {
+                    const val = localStorage.getItem(keys);
+                    try {
+                      result[keys] = val ? JSON.parse(val) : undefined;
+                    } catch {
+                      result[keys] = val;
+                    }
+                  } else if (Array.isArray(keys)) {
+                    keys.forEach(key => {
+                      const val = localStorage.getItem(key);
+                      try {
+                        result[key] = val ? JSON.parse(val) : undefined;
+                      } catch {
+                        result[key] = val;
+                      }
+                    });
+                  } else if (typeof keys === 'object' && keys !== null) {
+                    Object.keys(keys).forEach(key => {
+                      const val = localStorage.getItem(key);
+                      try {
+                        result[key] = val ? JSON.parse(val) : keys[key];
+                      } catch {
+                        result[key] = val;
+                      }
+                    });
+                  }
+                  if (callback) callback(result);
+                  resolve(result);
+                });
+              },
+              set: function(items, callback) {
+                return new Promise((resolve) => {
+                  Object.keys(items).forEach(key => {
+                    localStorage.setItem(key, JSON.stringify(items[key]));
+                  });
+                  if (callback) callback();
+                  resolve();
+                });
+              },
+              remove: function(keys, callback) {
+                return new Promise((resolve) => {
+                  if (typeof keys === 'string') {
+                    localStorage.removeItem(keys);
+                  } else if (Array.isArray(keys)) {
+                    keys.forEach(key => localStorage.removeItem(key));
+                  }
+                  if (callback) callback();
+                  resolve();
+                });
+              },
+              clear: function(callback) {
+                return new Promise((resolve) => {
+                  localStorage.clear();
+                  if (callback) callback();
+                  resolve();
+                });
+              }
+            }
+          },
+          tabs: {
+            query: function(queryInfo, callback) {
+              return new Promise((resolve) => {
+                const tab = {
+                  id: 1,
+                  url: "http://localhost:8080/test.html",
+                  title: "Video Resizer Test Page",
+                  active: true
+                };
+                if (callback) callback([tab]);
+                resolve([tab]);
+              });
+            },
+            sendMessage: function(tabId, message, options, callback) {
+              console.log("Mock tabs.sendMessage called:", tabId, message);
+              // Forward message to the test page's content script if loaded in an iframe or parent
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ source: 'page-eraser-mock-popup', message }, '*');
+              } else if (window.opener) {
+                window.opener.postMessage({ source: 'page-eraser-mock-popup', message }, '*');
+              }
+              if (typeof options === 'function') {
+                callback = options;
+              }
+              return new Promise((resolve) => {
+                if (callback) callback({ success: true });
+                resolve({ success: true });
+              });
+            }
+          },
+          action: {
+            setBadgeText: function(details, callback) {
+              console.log("Mock setBadgeText called:", details);
+              if (callback) callback();
+            },
+            setBadgeBackgroundColor: function(details, callback) {
+              console.log("Mock setBadgeBackgroundColor called:", details);
+              if (callback) callback();
+            }
+          }
+        };
+        window.chrome.storage.sync = window.chrome.storage.local;
+      }
+    </script>
+    <script src="locales.js"></script>
+    <script src="audio.js"></script>
+    <script src="tour.js"></script>
+    <script src="minesweeper.js"></script>
+    <script src="clippy.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

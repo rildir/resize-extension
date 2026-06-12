@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Video Resizer Test Page</title>
+  <link rel="stylesheet" href="content.css">
+  <script>
+    // Mock chrome extension APIs if running outside extension context
+    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.storage) {
+      const listeners = [];
+      window.chrome = {
+        runtime: {
+          id: "mock-extension-id",
+          sendMessage: function(message, callback) {
+            console.log("Mock content script sendMessage:", message);
+            if (callback) setTimeout(() => callback({ success: true }), 0);
+          },
+          onMessage: {
+            addListener: function(listener) {
+              listeners.push(listener);
+            },
+            removeListener: function(listener) {
+              const idx = listeners.indexOf(listener);
+              if (idx !== -1) listeners.splice(idx, 1);
+            }
+          },
+          lastError: null
+        },
+        storage: {
+          local: {
+            get: function(keys, callback) {
+              return new Promise((resolve) => {
+                let result = {};
+                if (keys === null) {
+                  for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    try { result[k] = JSON.parse(localStorage.getItem(k)); } catch { result[k] = localStorage.getItem(k); }
+                  }
+                } else if (typeof keys === 'string') {
+                  const val = localStorage.getItem(keys);
+                  try { result[keys] = val ? JSON.parse(val) : undefined; } catch { result[keys] = val; }
+                } else if (Array.isArray(keys)) {
+                  keys.forEach(key => {
+                    const val = localStorage.getItem(key);
+                    try { result[key] = val ? JSON.parse(val) : undefined; } catch { result[key] = val; }
+                  });
+                } else if (typeof keys === 'object' && keys !== null) {
+                  Object.keys(keys).forEach(key => {
+                    const val = localStorage.getItem(key);
+                    try { result[key] = val ? JSON.parse(val) : keys[key]; } catch { result[key] = val; }
+                  });
+                }
+                if (callback) callback(result);
+                resolve(result);
+              });
+            },
+            set: function(items, callback) {
+              return new Promise((resolve) => {
+                Object.keys(items).forEach(key => {
+                  localStorage.setItem(key, JSON.stringify(items[key]));
+                });
+                if (callback) callback();
+                resolve();
+              });
+            },
+            remove: function(keys, callback) {
+              return new Promise((resolve) => {
+                if (typeof keys === 'string') {
+                  localStorage.removeItem(keys);
+                } else if (Array.isArray(keys)) {
+                  keys.forEach(key => localStorage.removeItem(key));
+                }
+                if (callback) callback();
+                resolve();
+              });
+            },
+            clear: function(callback) {
+              return new Promise((resolve) => {
+                localStorage.clear();
+                if (callback) callback();
+                resolve();
+              });
+            }
+          }
+        }
+      };
+      window.chrome.storage.sync = window.chrome.storage.local;
+
+      // Handle message events from popup.html
+      window.addEventListener('message', (e) => {
+        if (e.data && e.data.source === 'page-eraser-mock-popup') {
+          console.log("Mock content script received postMessage:", e.data.message);
+          listeners.forEach(listener => {
+            try {
+              listener(e.data.message, {}, (res) => {});
+            } catch (err) {
+              console.error(err);
+            }
+          });
+        }
+      });
+    }
+  </script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #111216;
+      color: #e1e2e6;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 30px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      max-width: 1000px;
+      width: 100%;
+    }
+    .card {
+      background: #1e2026;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #2e3039;
+    }
+    /* Case 1: overflow: hidden and transform */
+    .container-transform {
+      width: 400px;
+      height: 225px;
+      overflow: hidden;
+      transform: translate3d(5px, 5px, 0px) scale(0.95);
+      border: 2px dashed #7c6af7;
+      position: relative;
+      background: #000;
+      border-radius: 8px;
+    }
+    /* Case 2: clip-path and filter */
+    .container-clip {
+      width: 400px;
+      height: 225px;
+      overflow: hidden;
+      clip-path: inset(0px round 12px);
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+      border: 2px dashed #ff5050;
+      position: relative;
+      background: #000;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+  <h1>Video Resizer Test Cases</h1>
+  <p>Test the extension under containing block and overflow hidden clipping conditions.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Case 1: Overflow Hidden + CSS Transform (translate3d, scale)</h3>
+      <p>The container forces a containing block. If containing blocks are not broken, the popped-out fixed video will clip or misalign.</p>
+      <div class="container-transform">
+        <video src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" loop muted autoplay></video>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Case 2: Overflow Hidden + Clip Path + CSS Filter</h3>
+      <p>The container limits rendering boundary. Without style override, resizing the video will keep it clipped within the red boundary.</p>
+      <div class="container-clip">
+        <video src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" loop muted autoplay></video>
+      </div>
+    </div>
+  </div>
+  <script src="content.js"></script>
+</body>
+</html>

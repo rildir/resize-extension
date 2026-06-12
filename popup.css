@@ -1,0 +1,1411 @@
+/**
+ * PageEraser — Popup Styles (Windows 95/98 Classic Design Theme)
+ * 300px fixed width layout.
+ */
+
+/* Reset & MS Sans Serif / Tahoma fonts */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-smooth: never;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: none;
+}
+
+body {
+  width: 300px;
+  background: #c0c0c0;
+  color: #000000;
+  font-family: "MS Sans Serif", "Tahoma", "Arial", sans-serif;
+  font-size: 11px;
+  overflow: hidden;
+  padding: 3px;
+}
+
+/* 3D Bevel helper classes */
+.window, .win-modal {
+  --title-bg: linear-gradient(90deg, #000080, #1084d0);
+  --active-highlight: #000080;
+}
+
+.window {
+  background: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #808080;
+  border-bottom: 1px solid #808080;
+  box-shadow: inset 1px 1px 0 #dfdfdf, 1px 1px 0 #000000;
+}
+
+/* Blue Theme (Windows 98) */
+.window.theme-blue, .win-modal.theme-blue {
+  --title-bg: linear-gradient(90deg, #0a246a, #a6caf0);
+  --active-highlight: #0a246a;
+}
+
+/* Plum Theme */
+.window.theme-plum, .win-modal.theme-plum {
+  --title-bg: linear-gradient(90deg, #4a004a, #a400a4);
+  --active-highlight: #4a004a;
+}
+
+.window-body {
+  position: relative;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Title Bar */
+.title-bar {
+  background: var(--title-bg) !important;
+  color: #ffffff;
+  padding: 3px 4px 4px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.title-bar-text {
+  letter-spacing: 0.5px;
+}
+
+.title-bar-controls {
+  display: flex;
+  gap: 2px;
+}
+
+.win-btn-control {
+  width: 16px;
+  height: 14px;
+  background: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #808080;
+  border-bottom: 1px solid #808080;
+  box-shadow: inset 1px 1px 0 #dfdfdf, 1px 1px 0 #000000;
+  position: relative;
+  cursor: pointer;
+  outline: none;
+}
+
+.win-btn-control:active {
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #000000, 1px 1px 0 #dfdfdf;
+  padding: 1px 0 0 1px;
+}
+
+/* Windows buttons control icons */
+.minimize-btn::before {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: 3px;
+  width: 6px;
+  height: 2px;
+  background: #000000;
+}
+
+.maximize-btn::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 8px;
+  height: 6px;
+  border: 1px solid #000000;
+  border-top-width: 2px;
+}
+
+.close-btn::before,
+.close-btn::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 2px;
+  background: #000000;
+  top: 5px;
+  left: 3px;
+}
+
+.close-btn::before {
+  transform: rotate(45deg);
+}
+
+.close-btn::after {
+  transform: rotate(-45deg);
+}
+
+/* Menu Bar */
+.menu-bar {
+  display: flex;
+  padding: 3px 6px;
+  background: #c0c0c0;
+  border-bottom: 1px solid #808080;
+  box-shadow: 0 1px 0 #ffffff;
+  gap: 4px;
+}
+
+.menu-item-container {
+  position: relative;
+}
+
+.menu-item {
+  color: #000000;
+  cursor: default;
+  padding: 2px 6px;
+}
+
+.menu-item:hover, .menu-item.active {
+  background: var(--active-highlight);
+  color: #ffffff;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #808080;
+  border-bottom: 1px solid #808080;
+  box-shadow: inset 1px 1px 0 #dfdfdf, 1px 1px 0 #000000;
+  z-index: 100;
+  min-width: 170px;
+  margin-top: 1px;
+}
+
+.dropdown-menu.visible {
+  display: block;
+}
+
+#dropdown-help {
+  left: auto;
+  right: 0;
+}
+
+.dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding: 4px 12px 4px 24px;
+  color: #000000;
+  cursor: default;
+  white-space: nowrap;
+  position: relative;
+}
+
+.dropdown-item:hover {
+  background: var(--active-highlight);
+  color: #ffffff;
+}
+
+.menu-shortcut {
+  color: #808080;
+  font-size: 10px;
+  margin-left: auto;
+}
+
+.dropdown-item:hover .menu-shortcut {
+  color: #ffffff;
+}
+
+.dropdown-item.checkable .check-mark {
+  position: absolute;
+  left: 6px;
+  visibility: hidden;
+  font-weight: bold;
+}
+
+.dropdown-item.checkable.checked .check-mark {
+  visibility: visible;
+}
+
+.underline {
+  text-decoration: underline;
+}
+
+/* Active Site Panel */
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-label {
+  font-weight: bold;
+  color: #000000;
+}
+
+.field-value-sunken {
+  flex: 1;
+  background: #ffffff;
+  color: #000000;
+  padding: 4px 6px;
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #000000, inset -1px -1px 0 #dfdfdf;
+  font-family: monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Command Buttons */
+.win-btn {
+  background: #c0c0c0;
+  color: #000000;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #808080;
+  border-bottom: 1px solid #808080;
+  box-shadow: inset 1px 1px 0 #dfdfdf, 1px 1px 0 #000000;
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.win-btn:active:not(:disabled) {
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #000000, 1px 1px 0 #dfdfdf;
+  padding: 6px 11px 4px 13px;
+}
+
+.win-btn:disabled {
+  color: #808080;
+  text-shadow: 1px 1px 0 #ffffff;
+  cursor: not-allowed;
+}
+
+.win-btn-primary {
+  width: 100%;
+  padding: 8px 12px;
+  outline: 1px solid #000000;
+  outline-offset: -1px;
+}
+
+.win-btn-primary:active:not(:disabled) {
+  padding: 9px 11px 7px 13px !important;
+}
+
+/* Elements lists */
+.list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.list-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-label {
+  font-weight: bold;
+}
+
+.win-input {
+  width: 90px;
+  background: #ffffff;
+  color: #000000;
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #000000, inset -1px -1px 0 #dfdfdf;
+  padding: 1px 4px;
+  font-family: inherit;
+  font-size: 10px;
+  outline: none;
+}
+
+.list-title {
+  font-weight: bold;
+  color: #000000;
+}
+
+.sunken-panel {
+  height: 120px;
+  overflow-y: scroll;
+  background: #ffffff;
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #000000, inset -1px -1px 0 #dfdfdf;
+  display: flex;
+  flex-direction: column;
+  padding: 2px;
+  gap: 2px;
+}
+
+/* Item row styling */
+.selector-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px;
+  background: #ffffff;
+  border-bottom: 1px dashed #dfdfdf;
+  gap: 6px;
+}
+
+.selector-item:hover {
+  background: var(--active-highlight);
+  color: #ffffff;
+}
+
+.selector-item:hover .selector-text {
+  color: #ffffff !important;
+}
+
+.selector-text {
+  font-family: monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.selector-text.text-hide {
+  color: #800000; /* Windows 95 Dark Red */
+}
+
+.selector-text.text-stretch {
+  color: #008080; /* Windows 95 Teal */
+}
+
+/* Badges */
+.action-badge {
+  font-size: 9px;
+  font-weight: bold;
+  border: 1px solid;
+  padding: 0 4px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.badge-hide {
+  border-color: #800000;
+  background: #ffe0e0;
+  color: #800000;
+}
+
+.selector-item:hover .badge-hide {
+  background: #ffffff;
+  color: #800000;
+}
+
+.badge-stretch {
+  border-color: #008080;
+  background: #e0f8f8;
+  color: #008080;
+}
+
+.selector-item:hover .badge-stretch {
+  background: #ffffff;
+  color: #008080;
+}
+
+/* Small button styling */
+.win-btn-sm {
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: normal;
+}
+
+.win-btn-sm:active:not(:disabled) {
+  padding: 2px 5px 0px 7px !important;
+}
+
+.empty-state {
+  text-align: center;
+  color: #808080;
+  padding: 24px 0;
+  font-style: italic;
+}
+
+/* Fieldset */
+.win-fieldset {
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  padding: 8px 10px;
+  margin-top: 4px;
+}
+
+.win-legend {
+  font-weight: bold;
+  padding: 0 4px;
+  color: #000000;
+}
+
+.shortcut-subtitle {
+  font-size: 9px;
+  font-weight: bold;
+  color: #800000;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: #000000;
+}
+
+.key-label {
+  font-weight: bold;
+  background: #dfdfdf;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #808080;
+  border-bottom: 1px solid #808080;
+  padding: 1px 5px;
+  font-family: monospace;
+  color: #000000;
+  min-width: 20px;
+  text-align: center;
+}
+
+.key-desc {
+  font-size: 10px;
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  margin-top: 4px;
+  gap: 2px;
+}
+
+.status-bar-field {
+  flex: 1;
+  background: #c0c0c0;
+  padding: 2px 6px;
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #000000;
+  color: #000000;
+  font-weight: bold;
+}
+
+.text-right {
+  text-align: right;
+  flex: 0 0 50px;
+  font-weight: normal;
+}
+
+/* Scrollbar styling */
+.sunken-panel::-webkit-scrollbar {
+  width: 16px;
+}
+
+.sunken-panel::-webkit-scrollbar-track {
+  background: #dfdfdf;
+  box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #ffffff;
+}
+
+.sunken-panel::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #808080;
+  border-bottom: 1px solid #808080;
+  box-shadow: inset 1px 1px 0 #dfdfdf, 1px 1px 0 #000000;
+}
+
+/* Modal Overlays */
+.win-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.win-modal {
+  width: 260px;
+  background: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #808080;
+  border-bottom: 1px solid #808080;
+  box-shadow: inset 1px 1px 0 #dfdfdf, 1px 1px 0 #000000;
+}
+
+.win-modal-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.about-logo-container {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.about-text-container {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.about-title {
+  font-weight: bold;
+  font-size: 13px;
+  color: #000000;
+}
+
+.about-version {
+  font-weight: bold;
+  color: #000000;
+}
+
+.about-copyright, .about-credits {
+  color: #404040;
+}
+
+.about-footer {
+  display: flex;
+  justify-content: center;
+}
+
+.win-btn-ok {
+  min-width: 60px;
+}
+
+/* Retro Computer Icon */
+.retro-computer-icon {
+  width: 44px;
+  height: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.monitor-outer {
+  width: 32px;
+  height: 24px;
+  background: #dfdfdf;
+  border-top: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  border-right: 2px solid #808080;
+  border-bottom: 2px solid #808080;
+  box-shadow: inset 1px 1px 0 #ffffff, 1px 1px 0 #000000;
+  padding: 2px;
+}
+
+.monitor-inner {
+  width: 100%;
+  height: 100%;
+  background: #808080;
+  border-top: 1px solid #000000;
+  border-left: 1px solid #000000;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+}
+
+.monitor-screen {
+  width: 100%;
+  height: 100%;
+  background: #008080;
+  border: 1px solid #000000;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.monitor-screen:hover {
+  background: #00a0a0;
+}
+
+.monitor-screen:active {
+  background: #006060;
+}
+
+.stand {
+  width: 10px;
+  height: 4px;
+  background: #c0c0c0;
+  border-left: 2px solid #ffffff;
+  border-right: 2px solid #808080;
+  box-shadow: 1px 0 0 #000000;
+}
+
+.keyboard {
+  width: 38px;
+  height: 4px;
+  background: #dfdfdf;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #808080;
+  border-bottom: 1px solid #808080;
+  box-shadow: 1px 1px 0 #000000;
+}
+
+/* Developer Credits */
+.about-divider {
+  height: 1px;
+  background: #808080;
+  border-bottom: 1px solid #ffffff;
+  margin: 6px 0;
+}
+
+.developer-info {
+  margin-top: 4px;
+  font-size: 10px;
+  color: #000000;
+  text-align: center;
+}
+
+.dev-name {
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+
+.dev-links {
+  color: #000000;
+}
+
+.win-link {
+  color: #000080;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.win-link:hover {
+  color: #1084d0;
+}
+
+/* Minesweeper Styles */
+.minesweeper-dashboard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #c0c0c0;
+  padding: 4px;
+  border-top: 2px solid #808080;
+  border-left: 2px solid #808080;
+  border-right: 2px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+  margin-bottom: 6px;
+}
+
+.minesweeper-counter {
+  background: #000000;
+  color: #ff0000;
+  font-family: "Courier New", monospace;
+  font-size: 14px;
+  font-weight: bold;
+  padding: 2px 4px;
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  min-width: 35px;
+  text-align: center;
+}
+
+.minesweeper-dashboard .face-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #808080;
+  border-bottom: 1px solid #808080;
+  box-shadow: inset 1px 1px 0 #dfdfdf, 1px 1px 0 #000000;
+  cursor: pointer;
+  outline: none;
+}
+
+.minesweeper-dashboard .face-btn:active {
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #000000, 1px 1px 0 #dfdfdf;
+  padding: 1px 0 0 1px;
+}
+
+.minesweeper-grid-sunken {
+  border-top: 2px solid #808080;
+  border-left: 2px solid #808080;
+  border-right: 2px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+}
+
+.minesweeper-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 18px);
+  grid-template-rows: repeat(8, 18px);
+  width: 144px;
+  height: 144px;
+  background: #808080;
+}
+
+.mine-cell {
+  width: 18px;
+  height: 18px;
+  background: #c0c0c0;
+  border-top: 1px solid #ffffff;
+  border-left: 1px solid #ffffff;
+  border-right: 1px solid #808080;
+  border-bottom: 1px solid #808080;
+  box-shadow: inset 1px 1px 0 #dfdfdf;
+  font-size: 11px;
+  font-weight: bold;
+  text-align: center;
+  line-height: 16px;
+  user-select: none;
+  cursor: default;
+}
+
+.mine-cell.opened {
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #c0c0c0;
+  border-bottom: 1px solid #c0c0c0;
+  background: #c0c0c0;
+  box-shadow: none;
+}
+
+.mine-cell.exploded {
+  background: #ff0000 !important;
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ff0000;
+  border-bottom: 1px solid #ff0000;
+}
+
+.mine-cell.num-1 { color: #0000ff; }
+.mine-cell.num-2 { color: #008000; }
+.mine-cell.num-3 { color: #ff0000; }
+.mine-cell.num-4 { color: #000080; }
+.mine-cell.num-5 { color: #800000; }
+.mine-cell.num-6 { color: #008080; }
+.mine-cell.num-7 { color: #000000; }
+.mine-cell.num-8 { color: #808080; }
+
+/* ─── Spotlight Tour Onboarding ────────────────────────── */
+.win-tour-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.win-tour-spotlight {
+  position: absolute;
+  z-index: 1001;
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
+  border: 2px dashed #ffff00;
+  border-radius: 3px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.win-tour-tooltip {
+  position: absolute;
+  z-index: 1002;
+  width: 240px;
+  background: #ffffcc;
+  color: #000000;
+  border: 1px solid #000000;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  padding: 8px;
+  font-size: 11px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tour-tooltip-body {
+  font-family: "MS Sans Serif", "Tahoma", "Arial", sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.tour-tooltip-step {
+  color: #000000;
+}
+
+.tour-tooltip-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px dotted #808080;
+  padding-top: 6px;
+  margin-top: 2px;
+}
+
+.tour-nav-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tour-progress {
+  font-family: monospace;
+  font-size: 10px;
+  color: #555555;
+  user-select: none;
+}
+
+.tour-btn {
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+.tour-btn:active:not(:disabled) {
+  padding: 3px 5px 1px 7px !important;
+}
+
+.win-tour-tooltip.arrow-top::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: var(--arrow-left, 20px);
+  border-width: 0 6px 6px 6px;
+  border-color: transparent transparent #000000 transparent;
+  width: 0;
+  height: 0;
+}
+.win-tour-tooltip.arrow-top::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: var(--arrow-left, 20px);
+  border-width: 0 6px 6px 6px;
+  border-color: transparent transparent #ffffcc transparent;
+  width: 0;
+  height: 0;
+}
+
+.win-tour-tooltip.arrow-bottom::before {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: var(--arrow-left, 20px);
+  border-width: 6px 6px 0 6px;
+  border-color: #000000 transparent transparent transparent;
+  width: 0;
+  height: 0;
+}
+.win-tour-tooltip.arrow-bottom::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: var(--arrow-left, 20px);
+  border-width: 6px 6px 0 6px;
+  border-color: #ffffcc transparent transparent transparent;
+  width: 0;
+  height: 0;
+}
+
+/* ─── Accessibility: High Contrast Theme ─────────────────── */
+.window.theme-high-contrast, .win-modal.theme-high-contrast {
+  --title-bg: #000000;
+  --active-highlight: #000000;
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid #000000 !important;
+  box-shadow: none !important;
+}
+
+.window.theme-high-contrast .title-bar, .win-modal.theme-high-contrast .title-bar {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+.window.theme-high-contrast .win-btn, .win-modal.theme-high-contrast .win-btn {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 2px solid #000000 !important;
+  box-shadow: none !important;
+}
+
+.window.theme-high-contrast .win-btn:active, .win-modal.theme-high-contrast .win-btn:active {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+.window.theme-high-contrast .sunken-panel, .window.theme-high-contrast .field-value-sunken {
+  background: #ffffff !important;
+  border: 2px solid #000000 !important;
+  box-shadow: none !important;
+}
+
+.window.theme-high-contrast .win-fieldset {
+  border: 2px solid #000000 !important;
+}
+
+.window.theme-high-contrast .menu-bar {
+  background: #ffffff !important;
+  border-bottom: 2px solid #000000 !important;
+  box-shadow: none !important;
+}
+
+.window.theme-high-contrast .menu-item:hover, .window.theme-high-contrast .menu-item.active {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+/* ─── Accessibility: Large Text Scale ────────────────────── */
+body.text-large {
+  font-size: 13px !important;
+}
+
+body.text-large .win-btn {
+  font-size: 13px !important;
+  padding: 6px 14px !important;
+}
+
+body.text-large .field-label,
+body.text-large .list-title,
+body.text-large .filter-label,
+body.text-large .win-legend,
+body.text-large .shortcut-subtitle,
+body.text-large .shortcut-row,
+body.text-large .status-bar,
+body.text-large .menu-item,
+body.text-large .dropdown-item,
+body.text-large .about-title,
+body.text-large .about-version,
+body.text-large .about-copyright,
+body.text-large .about-credits,
+body.text-large .dev-name,
+body.text-large .selector-text {
+  font-size: 12px !important;
+}
+
+body.text-large .win-tour-tooltip {
+  width: 260px !important;
+  font-size: 12px !important;
+}
+
+body.text-large .tour-tooltip-body {
+  font-size: 12px !important;
+}
+
+/* ─── Title Bar Button States ─────────────────────────── */
+.window.minimized .window-body,
+.window.minimized .menu-bar {
+  display: none !important;
+}
+
+.window.minimized .status-bar {
+  margin-top: 0 !important;
+}
+
+.window.maximized .maximize-btn::before {
+  /* Restore icon: two overlapping squares */
+  width: 6px !important;
+  height: 5px !important;
+  top: 4px !important;
+  left: 2px !important;
+  box-shadow: 2px -2px 0 0 #000000 !important;
+}
+
+@keyframes win-wobble {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(-3px) rotate(-0.5deg); }
+  30%  { transform: translateX(3px) rotate(0.5deg); }
+  45%  { transform: translateX(-2px) rotate(-0.3deg); }
+  60%  { transform: translateX(2px) rotate(0.3deg); }
+  75%  { transform: translateX(-1px); }
+  100% { transform: translateX(0); }
+}
+
+.window.wobble {
+  animation: win-wobble 0.4s ease-in-out !important;
+}
+
+/* ─── Clippy Assistant Styling ─────────────────────────── */
+.win-clippy-buddy {
+  position: absolute !important;
+  bottom: 25px !important;
+  right: 10px !important;
+  width: 140px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  z-index: 100 !important;
+  pointer-events: none !important;
+}
+
+.win-clippy-buddy .clippy-bubble,
+.win-clippy-buddy .clippy-sprite {
+  pointer-events: auto !important;
+}
+
+.clippy-bubble {
+  position: relative !important;
+  background: #ffffe1 !important;
+  color: #000000 !important;
+  border: 1px solid #000000 !important;
+  border-radius: 6px !important;
+  padding: 8px !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.2) !important;
+  width: 100% !important;
+  min-height: 54px !important;
+  display: none;
+  align-items: center !important;
+  justify-content: center !important;
+  font-family: "MS Sans Serif", "Tahoma", Arial, sans-serif !important;
+}
+
+.clippy-bubble.visible {
+  display: flex !important;
+}
+
+.clippy-bubble::after {
+  content: "" !important;
+  position: absolute !important;
+  bottom: -6px !important;
+  right: 20px !important;
+  left: auto !important;
+  border-width: 6px 6px 0 !important;
+  border-color: #ffffe1 transparent !important;
+  display: block !important;
+  width: 0 !important;
+}
+
+.clippy-bubble::before {
+  content: "" !important;
+  position: absolute !important;
+  bottom: -7px !important;
+  right: 20px !important;
+  left: auto !important;
+  border-width: 6px 6px 0 !important;
+  border-color: #000000 transparent !important;
+  display: block !important;
+  width: 0 !important;
+}
+
+.clippy-sprite {
+  width: 50px !important;
+  height: 60px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  user-select: none !important;
+}
+
+.clippy-paperclip {
+  position: relative !important;
+  width: 28px !important;
+  height: 44px !important;
+  border: 2px solid #555555 !important;
+  border-radius: 12px 12px 10px 10px !important;
+  background: transparent !important;
+  transform: rotate(-15deg) !important;
+  transition: transform 0.2s ease !important;
+}
+
+.clippy-sprite:hover .clippy-paperclip {
+  transform: rotate(-10deg) scale(1.05) !important;
+}
+
+/* Inner loop of paperclip using pseudo elements */
+.clippy-paperclip::after {
+  content: "" !important;
+  position: absolute !important;
+  top: 6px !important;
+  left: 4px !important;
+  width: 16px !important;
+  height: 28px !important;
+  border: 2px solid #555555 !important;
+  border-radius: 8px 8px 6px 6px !important;
+  border-top: none !important;
+}
+
+/* Eyes */
+.clippy-eye {
+  position: absolute !important;
+  width: 4px !important;
+  height: 4px !important;
+  background: #000000 !important;
+  border-radius: 50% !important;
+  top: 10px !important;
+  z-index: 5 !important;
+  transition: height 0.1s ease !important;
+}
+
+.clippy-eye.left {
+  left: 8px !important;
+}
+
+.clippy-eye.right {
+  left: 16px !important;
+}
+
+/* Eyebrows */
+.clippy-paperclip::before {
+  content: "" !important;
+  position: absolute !important;
+  width: 14px !important;
+  height: 2px !important;
+  background: #000000 !important;
+  top: 6px !important;
+  left: 7px !important;
+  border-radius: 1px !important;
+  z-index: 5 !important;
+}
+
+/* Mouth */
+.clippy-mouth {
+  position: absolute !important;
+  width: 8px !important;
+  height: 4px !important;
+  border-bottom: 2px solid #000000 !important;
+  border-radius: 0 0 4px 4px !important;
+  top: 16px !important;
+  left: 10px !important;
+  z-index: 5 !important;
+}
+
+/* Wink animation */
+.clippy-paperclip.wink .clippy-eye.right {
+  height: 1px !important;
+  top: 12px !important;
+}
+
+/* ─── Retro Expansion Pack Styles ────────────────────────── */
+
+/* 1. Drag & Drop Recycle Bin */
+.win-recycle-bin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 70px;
+  height: 48px;
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #000000, 1px 1px 0 #dfdfdf;
+  background: #c0c0c0;
+  padding: 2px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.win-recycle-bin.drag-over {
+  background: #dfdfdf;
+  border: 1px dashed #000080;
+  box-shadow: none;
+}
+
+.recycle-bin-icon {
+  width: 22px;
+  height: 20px;
+  position: relative;
+  margin-bottom: 2px;
+}
+
+/* Recycle Bin drawn in pure CSS */
+.recycle-bin-icon::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 4px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #808080;
+  border-top: none;
+  background: #c0c0c0;
+  border-radius: 0 0 2px 2px;
+}
+
+.recycle-bin-icon::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 3px;
+  background: #808080;
+  border-radius: 1px;
+}
+
+.recycle-bin-icon.empty::before {
+  /* Normal grey border */
+}
+
+/* Full state: pieces of paper popping out */
+.recycle-bin-icon.full::after {
+  transform: rotate(-15deg);
+  top: 0px;
+}
+
+.recycle-bin-icon.full::before {
+  border-color: #000080;
+  background-image: linear-gradient(45deg, #000080 25%, transparent 25%), 
+                    linear-gradient(-45deg, #000080 25%, transparent 25%);
+  background-size: 4px 4px;
+}
+
+.recycle-bin-label {
+  font-size: 9px;
+  font-weight: bold;
+  color: #000;
+  text-align: center;
+}
+
+/* Draggable Selector Item style modifications */
+.selector-item {
+  cursor: grab !important;
+  user-select: none;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.selector-item:active {
+  cursor: grabbing !important;
+}
+
+/* Mini document file icon inside selectors list */
+.selector-item::before {
+  content: "" !important;
+  display: inline-block !important;
+  width: 8px !important;
+  height: 10px !important;
+  background: #ffffff !important;
+  border: 1px solid #000000 !important;
+  margin-right: 6px !important;
+  position: relative !important;
+  flex-shrink: 0 !important;
+  box-shadow: 1px 1px 0 rgba(0,0,0,0.15) !important;
+}
+
+/* 2. Soundboard Event Styles */
+.sound-event-item {
+  padding: 4px 6px;
+  font-size: 11px;
+  color: #000;
+  cursor: default;
+  user-select: none;
+}
+
+.sound-event-item:hover {
+  background: #dfdfdf;
+}
+
+.sound-event-item.active {
+  background: var(--active-highlight) !important;
+  color: #ffffff !important;
+}
+
+/* 3. Blue Screen of Death (BSOD) */
+#bsod-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #000080;
+  color: #ffffff;
+  z-index: 9999;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 11px;
+  padding: 25px 20px;
+  box-sizing: border-box;
+  line-height: 1.4;
+  overflow: hidden;
+  user-select: none;
+}
+
+.bsod-content {
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+.bsod-header {
+  background: #c0c0c0;
+  color: #000080;
+  display: inline-block;
+  padding: 2px 14px;
+  font-weight: bold;
+  font-size: 12px;
+  margin-bottom: 25px;
+  text-transform: uppercase;
+}
+
+#bsod-overlay p {
+  margin: 12px 0;
+}
+
+#bsod-overlay ul {
+  margin: 12px 0;
+  padding-left: 20px;
+  list-style-type: square;
+}
+
+#bsod-overlay li {
+  margin: 6px 0;
+}
+
