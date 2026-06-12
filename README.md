@@ -236,6 +236,7 @@ PageEraser/
 ├── tour.js                # Onboarding — 3-step guided spotlight tour
 ├── minesweeper.js         # Easter egg — classic Minesweeper game
 ├── test.html              # Development test page with edge-case scenarios
+├── mock-chrome.js         # Chrome extension API mocks for playground mode
 ├── icons/                 # Extension icons (16, 48, 128px)
 │   ├── icon16.png
 │   ├── icon48.png

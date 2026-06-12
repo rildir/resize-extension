@@ -147,7 +147,7 @@
       ClippyAssistant.init();
       ClippyAssistant.setEnabled(clippyEnabled);
     } catch (err) {
-      console.error('[PageEraser] Popup init error:', err);
+      console.log('[PageEraser] Popup init status:', err);
     }
   }
 
@@ -176,14 +176,26 @@
   }
 
   /* ─── Messaging Helper ───────────────────────────────────── */
-  async function sendMessageToTab(message) {
-    if (!activeTabId) return null;
-    try {
-      return await chrome.tabs.sendMessage(activeTabId, message);
-    } catch (err) {
-      console.warn('[PageEraser] Could not communicate with tab:', err);
-      return null;
-    }
+  function sendMessageToTab(message) {
+    return new Promise((resolve) => {
+      if (!activeTabId) {
+        resolve(null);
+        return;
+      }
+      try {
+        chrome.tabs.sendMessage(activeTabId, message, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('[PageEraser] Tab communication status:', chrome.runtime.lastError.message);
+            resolve(null);
+          } else {
+            resolve(response);
+          }
+        });
+      } catch (err) {
+        console.log('[PageEraser] Messaging runtime exception:', err);
+        resolve(null);
+      }
+    });
   }
 
   /* ─── UI Refresh & Filtering ─────────────────────────────── */
@@ -203,7 +215,7 @@
 
       applyFilter();
     } catch (err) {
-      console.error('[PageEraser] Error listing selectors:', err);
+      console.log('[PageEraser] Status listing selectors:', err);
     }
   }
 
