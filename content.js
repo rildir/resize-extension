@@ -112,6 +112,7 @@
     constructor() {
       this.active = false;
       this.domain = window.location.hostname;
+      this.isTr = navigator.language.startsWith('tr');
       
       // Selection targets
       this.highlightedElement = null;
@@ -140,6 +141,25 @@
 
     async _init() {
       try {
+        // Load initial dynamic language setting
+        const langData = await storage.get('pe_lang');
+        if (langData && langData.pe_lang) {
+          this.isTr = langData.pe_lang === 'tr';
+        }
+
+        // Listen for live language updates from the popup
+        if (chrome.storage.onChanged) {
+          chrome.storage.onChanged.addListener((changes) => {
+            if (changes.pe_lang) {
+              this.isTr = changes.pe_lang.newValue === 'tr';
+              this._updatePaintbrushLanguage();
+              if (this.active) {
+                this._updateHighlight();
+              }
+            }
+          });
+        }
+
         this._setupMessageListener();
         this._setupKeyListeners();
         // Load and apply hidden elements immediately (runs at document_start)
@@ -147,6 +167,37 @@
       } catch (err) {
         this._log('Init error:', err);
       }
+    }
+
+    _updatePaintbrushLanguage() {
+      const toolbox = document.getElementById('pe-paint-toolbox');
+      if (!toolbox) return;
+      
+      const isTr = this.isTr;
+      const titleEl = toolbox.querySelector('.pe-paint-toolbox-title');
+      if (titleEl) titleEl.textContent = isTr ? 'Boya 95' : 'Paintbrush 95';
+      
+      const labels = toolbox.querySelectorAll('.pe-paint-label');
+      if (labels.length >= 3) {
+        labels[0].textContent = isTr ? 'Araçlar' : 'Tools';
+        labels[1].textContent = isTr ? 'Boyut' : 'Size';
+        labels[2].textContent = isTr ? 'Palet' : 'Palette';
+      }
+      
+      const brushText = toolbox.querySelector('#pe-tool-brush .pe-paint-tool-text');
+      if (brushText) brushText.textContent = isTr ? 'Fırça' : 'Brush';
+      
+      const sprayText = toolbox.querySelector('#pe-tool-spray .pe-paint-tool-text');
+      if (sprayText) sprayText.textContent = isTr ? 'Sprey' : 'Spray';
+      
+      const eraserText = toolbox.querySelector('#pe-tool-eraser .pe-paint-tool-text');
+      if (eraserText) eraserText.textContent = isTr ? 'Silgi' : 'Eraser';
+      
+      const undoBtn = document.getElementById('pe-paint-undo');
+      if (undoBtn) undoBtn.textContent = isTr ? 'Geri Al' : 'Undo';
+      
+      const clearBtn = document.getElementById('pe-paint-clear');
+      if (clearBtn) clearBtn.textContent = isTr ? 'Temizle' : 'Clear All';
     }
 
     _log(...args) {
@@ -403,7 +454,7 @@
         if ((action === 'erase' || action === 'stretch') && selector) {
           const undoBtn = document.createElement('button');
           undoBtn.className = 'pe-toast-undo-btn';
-          const isTr = navigator.language.startsWith('tr');
+          const isTr = this.isTr;
           undoBtn.textContent = isTr ? 'Geri Al' : 'Undo';
 
           undoBtn.addEventListener('click', (e) => {
@@ -512,7 +563,7 @@
       const displaySelector = selector.length > 50 ? '...' + selector.slice(-50) : selector;
       const tag = this.selectedElement.tagName.toLowerCase();
 
-      const isTr = navigator.language.startsWith('tr');
+      const isTr = this.isTr;
       const actionText = this._altPressed
         ? (isTr
             ? `<span style="color:#00d2d3;font-weight:700;"><kbd>Tıkla</kbd> Genişliğe Sığdır</span>`
@@ -582,7 +633,7 @@
       const selector = this._getSelector(element);
       this._stopSelectionMode();
 
-      const isTr = navigator.language.startsWith('tr');
+      const isTr = this.isTr;
       // Apply style instantly in DOM
       if (action === 'stretch') {
         element.style.setProperty('width', '100%', 'important');
@@ -806,7 +857,7 @@
             e.preventDefault();
             const lastItem = this._undoStack.pop();
             this._restoreSelector(lastItem.selector);
-            const isTr = navigator.language.startsWith('tr');
+            const isTr = this.isTr;
             const msg = isTr ? 'Geri Al: Element Eski Haline Getirildi' : 'Undo: Element Restored';
             this._showToast(msg, 'success');
           }
@@ -885,7 +936,7 @@
         try {
           switch (msg.type) {
             case 'START_SELECTION':
-              const isTr = navigator.language.startsWith('tr');
+              const isTr = this.isTr;
               if (this.active) {
                 this._stopSelectionMode();
                 if (!msg.silent) {
@@ -912,7 +963,7 @@
             case 'RESET_SITE':
               this._resetSite(msg.selectors, msg.silent).then(() => {
                 if (!msg.silent) {
-                  const isTrLang = navigator.language.startsWith('tr');
+                  const isTrLang = this.isTr;
                   const msgText = isTrLang ? 'PageEraser: Tüm Düzen Geri Yüklendi' : 'PageEraser: Layout Restored';
                   this._showToast(msgText, 'success');
                 }
@@ -922,7 +973,7 @@
             case 'REFRESH_RULES':
               this._loadAndApplyErasedElements().then(() => {
                 if (!msg.silent) {
-                  const isTrLang = navigator.language.startsWith('tr');
+                  const isTrLang = this.isTr;
                   const msgText = isTrLang ? 'PageEraser: Kurallar İçe Aktarıldı' : 'PageEraser: Rules Imported';
                   this._showToast(msgText, 'success');
                 }
@@ -999,7 +1050,7 @@
     _startPaintMode() {
       if (document.getElementById('pe-paint-canvas')) return;
 
-      const isTr = navigator.language.startsWith('tr');
+      const isTr = this.isTr;
 
       const canvas = document.createElement('canvas');
       canvas.id = 'pe-paint-canvas';
@@ -1428,7 +1479,7 @@
 
         document.body.appendChild(clippy);
 
-        const isTr = navigator.language.startsWith('tr');
+        const isTr = this.isTr;
         const welcomeMsg = isTr 
           ? 'PageEraser\'a hoş geldiniz! Silmek istediğiniz bir öğeye tıklayın. Genişletmek için Alt tuşuna basılı tutarak tıklayın.' 
           : 'Welcome to PageEraser! Click any element to erase it. Hold Alt key while clicking to stretch.';

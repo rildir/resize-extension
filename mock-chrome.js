@@ -4,6 +4,7 @@
   
   if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.storage) {
     const listeners = [];
+    const storageListeners = [];
     
     window.chrome = {
       runtime: {
@@ -69,9 +70,29 @@
           },
           set: function(items, callback) {
             return new Promise((resolve) => {
+              const changes = {};
               Object.keys(items).forEach(key => {
+                const oldValue = localStorage.getItem(key);
                 localStorage.setItem(key, JSON.stringify(items[key]));
+                changes[key] = {
+                  oldValue: oldValue ? JSON.parse(oldValue) : undefined,
+                  newValue: items[key]
+                };
               });
+              // Trigger onChanged listeners
+              storageListeners.forEach(listener => {
+                try {
+                  listener(changes, 'local');
+                } catch (e) {
+                  console.error("Error in mock storage listener:", e);
+                }
+              });
+              // Notify parent/opener to sync storage
+              if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ source: 'page-eraser-mock-storage', changes }, '*');
+              } else if (window.opener) {
+                window.opener.postMessage({ source: 'page-eraser-mock-storage', changes }, '*');
+              }
               if (callback) callback();
               resolve();
             });
@@ -93,6 +114,15 @@
               if (callback) callback();
               resolve();
             });
+          }
+        },
+        onChanged: {
+          addListener: function(listener) {
+            storageListeners.push(listener);
+          },
+          removeListener: function(listener) {
+            const idx = storageListeners.indexOf(listener);
+            if (idx !== -1) storageListeners.splice(idx, 1);
           }
         }
       },
@@ -146,6 +176,18 @@
         listeners.forEach(listener => {
           try {
             listener(e.data.message, {}, (res) => {});
+          } catch (err) {
+            console.error(err);
+          }
+        });
+      } else if (e.data && e.data.source === 'page-eraser-mock-storage') {
+        console.log("Mock chrome script received storage sync postMessage:", e.data.changes);
+        Object.keys(e.data.changes).forEach(key => {
+          localStorage.setItem(key, JSON.stringify(e.data.changes[key].newValue));
+        });
+        storageListeners.forEach(listener => {
+          try {
+            listener(e.data.changes, 'local');
           } catch (err) {
             console.error(err);
           }
