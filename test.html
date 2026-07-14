@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Video Resizer Test Page</title>
+  <link rel="stylesheet" href="content.css">
+  <script src="mock-chrome.js"></script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #111216;
+      color: #e1e2e6;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 30px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      max-width: 1000px;
+      width: 100%;
+    }
+    .card {
+      background: #1e2026;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid #2e3039;
+    }
+    /* Case 1: overflow: hidden and transform */
+    .container-transform {
+      width: 400px;
+      height: 225px;
+      overflow: hidden;
+      transform: translate3d(5px, 5px, 0px) scale(0.95);
+      border: 2px dashed #7c6af7;
+      position: relative;
+      background: #000;
+      border-radius: 8px;
+    }
+    /* Case 2: clip-path and filter */
+    .container-clip {
+      width: 400px;
+      height: 225px;
+      overflow: hidden;
+      clip-path: inset(0px round 12px);
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+      border: 2px dashed #ff5050;
+      position: relative;
+      background: #000;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+  <h1>Video Resizer Test Cases</h1>
+  <p>Test the extension under containing block and overflow hidden clipping conditions.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Case 1: Overflow Hidden + CSS Transform (translate3d, scale)</h3>
+      <p>The container forces a containing block. If containing blocks are not broken, the popped-out fixed video will clip or misalign.</p>
+      <div class="container-transform">
+        <video src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" loop muted autoplay></video>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Case 2: Overflow Hidden + Clip Path + CSS Filter</h3>
+      <p>The container limits rendering boundary. Without style override, resizing the video will keep it clipped within the red boundary.</p>
+      <div class="container-clip">
+        <video src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" loop muted autoplay></video>
+      </div>
+    </div>
+  </div>
+  <script src="content.js"></script>
+</body>
+</html>
