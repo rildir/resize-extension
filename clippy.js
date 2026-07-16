@@ -16,7 +16,7 @@ const ClippyAssistant = {
   tips: {
     en: [
       "It looks like you are trying to erase an element. Would you like some help with that?",
-      "Tip: You can use the 'Ctrl+Shift+E' key combination to toggle selection mode without opening the popup!",
+      "Tip: You can use the 'Alt+Shift+E' key combination to toggle selection mode without opening the popup!",
       "Tip: Pressing 'Alt' while clicking an element stretches it to 100% width instead of hiding it!",
       "Tip: Press 'Ctrl+Z' on the web page to instantly undo your last erased element.",
       "Tip: Use the inline 'Edit' button to fine-tune your CSS selectors if PageEraser hides too much!",
@@ -27,7 +27,7 @@ const ClippyAssistant = {
     ],
     tr: [
       "Görünüşe göre bir elementi silmeye çalışıyorsunuz. Bu konuda yardım ister misiniz?",
-      "İpucu: Popup'ı açmadan seçim modunu başlatmak için 'Ctrl+Shift+E' tuş kombinasyonunu kullanabilirsiniz!",
+      "İpucu: Popup'ı açmadan seçim modunu başlatmak için 'Alt+Shift+E' tuş kombinasyonunu kullanabilirsiniz!",
       "İpucu: Seçim modunda bir elemana 'Alt' tuşuna basarak tıklarsanız, onu gizlemek yerine tam genişliğe sığdırır!",
       "İpucu: Sayfada son sildiğiniz elemanı anında geri getirmek için 'Ctrl+Z' kısayolunu kullanabilirsiniz.",
       "İpucu: PageEraser çok fazla alan gizlerse, CSS seçicinizi ince ayarlamak için kural listesindeki 'Düzenle' butonunu kullanın!",
