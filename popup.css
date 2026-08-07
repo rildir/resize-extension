@@ -15,6 +15,28 @@
   -moz-osx-font-smoothing: none;
 }
 
+/* Form controls: kill the UA's native rounded/native look.
+   Without this, macOS Chrome and the refreshed Chromium form controls
+   round the corners of every button and input, breaking the Win95 look. */
+button,
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  border-radius: 0;
+  background-image: none;
+  color: inherit;
+}
+
+/* Checkboxes keep their native rendering (appearance:none would blank them
+   out), but must not be rounded. */
+input[type="checkbox"],
+input[type="radio"] {
+  border-radius: 0;
+}
+
 body {
   width: 300px;
   background: #c0c0c0;
@@ -350,6 +372,13 @@ body {
   font-family: inherit;
   font-size: 10px;
   outline: none;
+}
+
+/* Rejected selector in the inline editor */
+.win-input-invalid {
+  background: #ffe0e0;
+  outline: 1px solid #c00000;
+  outline-offset: -1px;
 }
 
 .list-title {

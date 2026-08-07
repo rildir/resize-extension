@@ -62,25 +62,16 @@
             <span class="underline">A</span>ctions
           </div>
           <div class="dropdown-menu" id="dropdown-actions">
-            <div
-              class="dropdown-item"
-              id="menu-item-select"
-            >
+            <div class="dropdown-item" id="menu-item-select">
               <span data-i18n="startSelection">Start Selection</span>
               <span class="menu-shortcut">Alt+Shift+E</span>
             </div>
-            <div
-              class="dropdown-item"
-              id="menu-item-reset"
-            >
+            <div class="dropdown-item" id="menu-item-reset">
               <span data-i18n="restoreLayout">Restore All Layout</span>
               <span class="menu-shortcut">Alt+Shift+D</span>
             </div>
             <div class="dropdown-divider"></div>
-            <div
-              class="dropdown-item"
-              id="menu-item-paint"
-            >
+            <div class="dropdown-item" id="menu-item-paint">
               <span data-i18n="paintWebpage">Paint Webpage</span>
               <span class="menu-shortcut">Alt+Shift+W</span>
             </div>
@@ -153,7 +144,11 @@
               Ask Clippy...
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item" id="menu-item-soundboard" data-i18n="soundboardMenu">
+            <div
+              class="dropdown-item"
+              id="menu-item-soundboard"
+              data-i18n="soundboardMenu"
+            >
               Soundboard...
             </div>
             <div class="dropdown-divider"></div>
@@ -229,13 +224,33 @@
         </div>
 
         <!-- Reset Layout Button & Recycle Bin -->
-        <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px; width: 100%">
-          <button class="win-btn" id="btn-reset" type="button" style="flex: 1; height: 32px;" disabled>
+        <div
+          style="
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 4px;
+            width: 100%;
+          "
+        >
+          <button
+            class="win-btn"
+            id="btn-reset"
+            type="button"
+            style="flex: 1; height: 32px"
+            disabled
+          >
             <span data-i18n="restoreLayout">Restore All Layout</span>
           </button>
-          <div id="recycle-bin-container" class="win-recycle-bin" title="Drag elements here to restore them, or double-click to restore all">
+          <div
+            id="recycle-bin-container"
+            class="win-recycle-bin"
+            title="Drag elements here to restore them, or double-click to restore all"
+          >
             <div class="recycle-bin-icon empty" id="recycle-bin-icon"></div>
-            <span class="recycle-bin-label" data-i18n="recycleBinLabel">Recycle Bin</span>
+            <span class="recycle-bin-label" data-i18n="recycleBinLabel"
+              >Recycle Bin</span
+            >
           </div>
         </div>
 
@@ -358,7 +373,7 @@
           <div class="about-text-container">
             <div class="about-title">PageEraser.exe</div>
             <div class="about-version" data-i18n="aboutVersion">
-              Version 1.5.0 (Retro Edition)
+              Version {version} (Retro Edition)
             </div>
             <div class="about-copyright" data-i18n="copyright">
               Copyright © 1995-2026 Retro Systems Corp.
@@ -377,6 +392,7 @@
                 <a
                   href="https://github.com/rildir"
                   target="_blank"
+                  rel="noopener noreferrer"
                   class="win-link"
                   >GitHub</a
                 >
@@ -384,6 +400,7 @@
                 <a
                   href="https://www.linkedin.com/in/recep-ildir/"
                   target="_blank"
+                  rel="noopener noreferrer"
                   class="win-link"
                   >LinkedIn</a
                 >
@@ -393,8 +410,22 @@
                 <a
                   href="https://www.linkedin.com/in/ecemartut/"
                   target="_blank"
+                  rel="noopener noreferrer"
                   class="win-link"
                   >LinkedIn</a
+                >
+              </div>
+              <div class="about-divider"></div>
+              <div class="dev-links">
+                <!-- Shipped inside the extension, so the policy is readable
+                     offline and cannot rot when a hosting URL changes. -->
+                <a
+                  href="privacy-policy.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="win-link"
+                  data-i18n="privacyPolicy"
+                  >Privacy Policy</a
                 >
               </div>
             </div>
@@ -414,7 +445,14 @@
       id="alert-overlay"
       style="display: none; z-index: 10000"
     >
-      <div class="win-modal" style="min-width: 250px; max-width: 300px">
+      <div
+        class="win-modal"
+        style="min-width: 250px; max-width: 300px"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="alert-title"
+        aria-describedby="alert-message"
+      >
         <div class="title-bar">
           <div class="title-bar-text" id="alert-title">PageEraser</div>
           <div class="title-bar-controls">
@@ -535,14 +573,30 @@
     <div id="overlay-soundboard" class="win-overlay" style="display: none">
       <div class="window win-modal" id="modal-soundboard" style="width: 320px">
         <div class="title-bar">
-          <div class="title-bar-text" data-i18n="soundboardTitle">Sound Properties</div>
+          <div class="title-bar-text" data-i18n="soundboardTitle">
+            Sound Properties
+          </div>
           <div class="title-bar-controls">
-            <button class="win-btn-control close-btn" id="btn-close-soundboard" aria-label="Close"></button>
+            <button
+              class="win-btn-control close-btn"
+              id="btn-close-soundboard"
+              aria-label="Close"
+            ></button>
           </div>
         </div>
         <div class="window-body">
-          <p style="margin-top: 0;" data-i18n="soundboardIntro">Select a sound event to preview:</p>
-          <div class="sunken-panel" style="height: 120px; overflow-y: auto; background: #fff; padding: 2px;">
+          <p style="margin-top: 0" data-i18n="soundboardIntro">
+            Select a sound event to preview:
+          </p>
+          <div
+            class="sunken-panel"
+            style="
+              height: 120px;
+              overflow-y: auto;
+              background: #fff;
+              padding: 2px;
+            "
+          >
             <div class="sound-event-item active" data-sound="startup">
               🔊 <span data-i18n="soundStartup">Windows 95 Startup</span>
             </div>
@@ -568,11 +622,22 @@
               🔊 <span data-i18n="soundSwish">Paint Brush</span>
             </div>
           </div>
-          <div class="field-row" style="justify-content: flex-end; margin-top: 10px; gap: 8px;">
-            <button class="win-btn" id="btn-play-soundboard" style="min-width: 60px;">
+          <div
+            class="field-row"
+            style="justify-content: flex-end; margin-top: 10px; gap: 8px"
+          >
+            <button
+              class="win-btn"
+              id="btn-play-soundboard"
+              style="min-width: 60px"
+            >
               ▶ <span data-i18n="soundPlay">Play</span>
             </button>
-            <button class="win-btn" id="btn-ok-soundboard" style="min-width: 60px;">
+            <button
+              class="win-btn"
+              id="btn-ok-soundboard"
+              style="min-width: 60px"
+            >
               <span data-i18n="okBtn">OK</span>
             </button>
           </div>
@@ -581,20 +646,30 @@
     </div>
 
     <!-- Blue Screen of Death (BSOD) Overlay -->
-    <div id="bsod-overlay" style="display: none;">
+    <div id="bsod-overlay" style="display: none">
       <div class="bsod-content">
         <div class="bsod-header">Windows</div>
-        <p>A fatal exception 0E has occurred at 0028:C0011A95 in VxD PageEraser(01) + 0000A115. The current webpage contains too many distracting elements, causing a severe layout headache.</p>
+        <p>
+          A fatal exception 0E has occurred at 0028:C0011A95 in VxD
+          PageEraser(01) + 0000A115. The current webpage contains too many
+          distracting elements, causing a severe layout headache.
+        </p>
         <p>System stability has been temporarily compromised.</p>
         <ul>
           <li>Press ENTER to restore all site elements to original layout.</li>
           <li>Press ESC to restart the PageEraser extension application.</li>
         </ul>
-        <p>Press any other key to attempt to continue. If you do, you might get lost in advertising clutter.</p>
-        <p style="text-align: center; margin-top: 30px;">Press any key to continue _</p>
+        <p>
+          Press any other key to attempt to continue. If you do, you might get
+          lost in advertising clutter.
+        </p>
+        <p style="text-align: center; margin-top: 30px">
+          Press any key to continue _
+        </p>
       </div>
     </div>
 
+    <script src="shared.js"></script>
     <script src="locales.js"></script>
     <script src="audio.js"></script>
     <script src="tour.js"></script>

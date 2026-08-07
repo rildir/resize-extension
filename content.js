@@ -10,7 +10,97 @@
   'use strict';
 
   const DEBUG = false;
-  const storage = chrome.storage.local || chrome.storage.sync;
+
+  /* ─── Extension Context Guard ───────────────────────────────
+   * When the extension is reloaded, updated or disabled, every content script
+   * already running in an open tab is orphaned: `chrome.runtime.id` becomes
+   * undefined and every chrome.* call throws "Extension context invalidated".
+   * Without this guard each orphaned tab spews uncaught rejections for the
+   * rest of its life, and the user sees a half-dead UI with no explanation.
+   *
+   * `chrome.runtime.id` is the cheapest reliable liveness probe.
+   */
+  function isContextAlive() {
+    try {
+      return typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  let contextLost = false;
+  const contextLostCallbacks = [];
+
+  function onContextLost(fn) {
+    contextLostCallbacks.push(fn);
+  }
+
+  function noteContextLost() {
+    if (contextLost) return;
+    contextLost = true;
+    // Strip our own UI: leaving a highlighter or toolbox on the page after the
+    // extension is gone would trap the user with controls that do nothing.
+    contextLostCallbacks.forEach(fn => {
+      try { fn(); } catch (err) { /* nothing left to report to */ }
+    });
+  }
+
+  /* A storage facade that degrades instead of throwing. Reads resolve to an
+   * empty result and writes resolve to false, so callers keep working against
+   * a page that simply has no saved rules. */
+  const rawStorage = chrome.storage.local || chrome.storage.sync;
+
+  const storage = {
+    async get(keys) {
+      if (!isContextAlive()) {
+        noteContextLost();
+        return {};
+      }
+      try {
+        return await rawStorage.get(keys);
+      } catch (err) {
+        noteContextLost();
+        return {};
+      }
+    },
+    async set(items) {
+      if (!isContextAlive()) {
+        noteContextLost();
+        return false;
+      }
+      try {
+        await rawStorage.set(items);
+        return true;
+      } catch (err) {
+        noteContextLost();
+        return false;
+      }
+    },
+    async remove(keys) {
+      if (!isContextAlive()) {
+        noteContextLost();
+        return false;
+      }
+      try {
+        await rawStorage.remove(keys);
+        return true;
+      } catch (err) {
+        noteContextLost();
+        return false;
+      }
+    }
+  };
+
+  // Page-controlled strings (tag names, ids, class names) end up in our
+  // tooltip/toast markup — escape them before any innerHTML assignment.
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
 
   // ─── Sound Synthesizer (Web Audio API) ────────────────────
   const RetroAudio = {
@@ -150,6 +240,10 @@
         this._lastRightClickedEl = e.target;
       }, true);
 
+      // If the extension is reloaded or updated while this tab is open, clean
+      // our UI off the page instead of leaving dead controls behind.
+      onContextLost(() => this._teardownOnContextLoss());
+
       this._init();
     }
 
@@ -226,17 +320,10 @@
       try {
         const data = await storage.get('pe_all_subdomains');
         const hostname = window.location.hostname;
-        if (data.pe_all_subdomains === true) {
-          const parts = hostname.split('.');
-          if (parts.length > 2) {
-            const secondLast = parts[parts.length - 2];
-            if (['com', 'co', 'net', 'org', 'gov', 'edu'].includes(secondLast) && parts.length > 3) {
-              return parts.slice(-3).join('.');
-            }
-            return parts.slice(-2).join('.');
-          }
-        }
-        return hostname;
+        // Shared with the popup via shared.js — see PE_getBaseDomain.
+        return data.pe_all_subdomains === true
+          ? PE_getBaseDomain(hostname)
+          : hostname;
       } catch (e) {
         return window.location.hostname;
       }
@@ -262,16 +349,20 @@
         // Append to documentElement immediately to avoid layout flash on load
         document.documentElement.appendChild(styleEl);
       }
-      if (selectors.length === 0) {
+      // Last line of defence: rules can arrive from an imported backup or a
+      // hand-edited selector, and they are about to be interpolated into a
+      // stylesheet. Anything that could break out of `sel { … }` is dropped.
+      const safeRules = PE_normalizeRules(selectors);
+
+      if (safeRules.length === 0) {
         styleEl.textContent = '';
         this._updateBadge(0);
         return;
       }
-      const cssRules = selectors.map(item => {
-        const isString = typeof item === 'string';
-        const sel = isString ? item : item.selector;
-        const act = isString ? 'hide' : item.action;
-        
+      const cssRules = safeRules.map(item => {
+        const sel = item.selector;
+        const act = item.action;
+
         if (act === 'stretch') {
           const parts = sel.split(/\s*>\s*/);
           const ancestorsRules = [];
@@ -286,15 +377,44 @@
         }
       }).join('\n');
       styleEl.textContent = cssRules;
-      this._updateBadge(selectors.length);
+      this._updateBadge(safeRules.length);
     }
 
     _updateBadge(count) {
-      try {
-        chrome.runtime.sendMessage({ type: 'UPDATE_BADGE', count });
-      } catch (e) {
-        // Extension context may be invalidated
+      if (!isContextAlive()) {
+        noteContextLost();
+        return;
       }
+      try {
+        // The promise rejects if the service worker is mid-restart; that is
+        // harmless, the next apply will re-send the count.
+        const sending = chrome.runtime.sendMessage({ type: 'UPDATE_BADGE', count });
+        if (sending && typeof sending.catch === 'function') sending.catch(() => {});
+      } catch (e) {
+        noteContextLost();
+      }
+    }
+
+    /* Called once the extension context is gone: remove every piece of UI we
+     * put on the page, leaving the site exactly as we found it. Applied rules
+     * stay — the user asked for those, and the stylesheet keeps working. */
+    _teardownOnContextLoss() {
+      try {
+        if (this.active) this._stopSelectionMode();
+      } catch (err) { /* best effort */ }
+
+      // Note: #pe-stylesheet is deliberately left in place. The user asked for
+      // those elements to be hidden; the rules should survive an extension
+      // reload rather than making the page flash back to its unfiltered state.
+      ['pe-toast-container', 'pe-paint-canvas', 'pe-eraser-cursor',
+       'pe-paint-toolbox', 'pe-clippy-buddy'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+      });
+
+      document.querySelectorAll('.pe-highlighter').forEach(el => el.remove());
+      this.highlighterEl = null;
+      this.tooltipEl = null;
     }
 
     /* ─── Selection Mode ────────────────────────────────────── */
@@ -576,8 +696,12 @@
       }
 
       const selector = this._getSelector(this.selectedElement);
-      const displaySelector = selector.length > 50 ? '...' + selector.slice(-50) : selector;
-      const tag = this.selectedElement.tagName.toLowerCase();
+      const rawDisplay = selector.length > 50 ? '...' + selector.slice(-50) : selector;
+      // CSS.escape() in _getSelector() makes the selector valid CSS, not safe
+      // HTML — an id like `<img src=x onerror=…>` would still be parsed as
+      // markup here. Escape before it goes anywhere near innerHTML.
+      const displaySelector = escapeHtml(rawDisplay);
+      const tag = escapeHtml(this.selectedElement.tagName.toLowerCase());
 
       const isTr = this.isTr;
       const actionText = this._altPressed
@@ -981,6 +1105,8 @@
     /* ─── Message Handling ──────────────────────────────────── */
 
     _setupMessageListener() {
+      if (!isContextAlive()) return;
+
       chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         try {
           switch (msg.type) {

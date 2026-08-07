@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test & package
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No dependencies to install — the extension and its test suite are
+      # plain JavaScript on purpose.
+      - name: Syntax check every script
+        shell: bash
+        run: |
+          for f in *.js tests/*.js; do
+            node --check "$f" || exit 1
+          done
+          echo "All scripts parse."
+
+      - name: Run test suite
+        run: node tests/run.js
+
+      - name: Build store package
+        run: powershell -ExecutionPolicy Bypass -File build.ps1
+
+      # Uploading the package makes every green build a downloadable,
+      # ready-to-submit artifact.
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pageeraser-extension
+          path: dist/*.zip
+          if-no-files-found: error

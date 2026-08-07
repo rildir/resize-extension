@@ -4,6 +4,34 @@
  * All rules use !important or highly specific classes to avoid site style overrides.
  */
 
+/* Form-control reset for our own in-page UI.
+   Two things round these buttons otherwise: the browser's native button
+   rendering (macOS Chrome / refreshed Chromium form controls), and the host
+   page's own `button { border-radius: … }` rules, which win over any property
+   we never declare. Hence appearance:none + border-radius:0 + !important. */
+.pe-toast-close-btn,
+.pe-toast-undo-btn,
+.pe-paint-tool-btn,
+.pe-paint-toolbox-close,
+.pe-paint-undo,
+.pe-paint-clear,
+.pe-color-box,
+.pe-paint-actions-row button,
+.pe-paint-toolbox button,
+.pe-paint-toolbox input,
+.pe-toast button {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  border-radius: 0 !important;
+  background-image: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  box-sizing: border-box !important;
+}
+
 /* Selection Highlight Box */
 .pe-highlighter {
   position: fixed !important;

@@ -36,18 +36,9 @@
   let allSelectors = []; // Cache list for live filtering
 
   // ─── Domain Scope Helpers ─────────────────────────────────
-  function getBaseDomain(hostname) {
-    if (!hostname) return '';
-    const parts = hostname.split('.');
-    if (parts.length > 2) {
-      const secondLast = parts[parts.length - 2];
-      if (['com', 'co', 'net', 'org', 'gov', 'edu'].includes(secondLast) && parts.length > 3) {
-        return parts.slice(-3).join('.');
-      }
-      return parts.slice(-2).join('.');
-    }
-    return hostname;
-  }
+  // PE_getBaseDomain lives in shared.js so the content script scopes rules
+  // to exactly the same domain we do here.
+  const getBaseDomain = PE_getBaseDomain;
 
   async function getDomainToUse(hostname) {
     const scopeData = await storage.get('pe_all_subdomains');
@@ -311,10 +302,16 @@
 
         saveBtn.addEventListener('click', async () => {
           const newSelector = editInput.value.trim();
-          if (!newSelector) {
+          // Hand-typed selectors get interpolated into a page stylesheet, so
+          // they go through the same validation as an imported rule.
+          if (!PE_isSafeSelector(newSelector)) {
             RetroAudio.playError();
+            editInput.classList.add('win-input-invalid');
+            editInput.focus();
+            editInput.select();
             return;
           }
+          editInput.classList.remove('win-input-invalid');
 
           RetroAudio.playSelection();
 
@@ -396,6 +393,198 @@
 
   document.addEventListener('click', () => {
     closeAllDropdowns();
+  });
+
+  /* ─── Alert Dialog ───────────────────────────────────────── */
+  const alertOverlay = document.getElementById('alert-overlay');
+  const alertTitleEl = document.getElementById('alert-title');
+  const alertMessageEl = document.getElementById('alert-message');
+  const alertIconEl = document.getElementById('alert-icon');
+  const alertOkBtn = document.getElementById('btn-ok-alert');
+  let alertPreviousFocus = null;
+
+  function showAlert(titleKey, messageKey, icon = 'ℹ️') {
+    const t = LOCALES[currentLang];
+    alertTitleEl.textContent = t[titleKey] || titleKey;
+    alertMessageEl.textContent = t[messageKey] || messageKey;
+    alertIconEl.textContent = icon;
+    alertPreviousFocus = document.activeElement;
+    alertOverlay.style.display = 'flex';
+    alertOkBtn.focus();
+  }
+
+  function hideAlert() {
+    alertOverlay.style.display = 'none';
+    // Return focus where the user left it, rather than dumping it on <body>.
+    if (alertPreviousFocus && alertPreviousFocus.focus) alertPreviousFocus.focus();
+    alertPreviousFocus = null;
+  }
+
+  function isAlertOpen() {
+    return alertOverlay.style.display === 'flex';
+  }
+
+  alertOkBtn.addEventListener('click', () => {
+    RetroAudio.playSelection();
+    hideAlert();
+  });
+  document.getElementById('btn-close-alert').addEventListener('click', hideAlert);
+
+  // A modal has to be operable from the keyboard, and must not let focus
+  // wander into the page behind it. Capture phase so it wins over the
+  // shortcut handlers registered further down.
+  document.addEventListener('keydown', (e) => {
+    if (!isAlertOpen()) return;
+    if (e.key === 'Escape' || e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      hideAlert();
+    } else if (e.key === 'Tab') {
+      // Only one focusable control in this dialog, so the trap is simply
+      // "keep it here".
+      e.preventDefault();
+      alertOkBtn.focus();
+    }
+  }, true);
+
+  /* ─── Import / Export Rules ──────────────────────────────── */
+  const BACKUP_FORMAT = 'PageEraser-rules';
+  const BACKUP_VERSION = 1;
+  const SELECTOR_KEY_PREFIX = 'pe_selectors_';
+
+  async function exportRules() {
+    try {
+      const all = await storage.get(null);
+      const rules = {};
+      let ruleCount = 0;
+
+      Object.keys(all).forEach(key => {
+        if (!key.startsWith(SELECTOR_KEY_PREFIX)) return;
+        const normalized = PE_normalizeRules(all[key]);
+        if (normalized.length === 0) return;
+        rules[key.slice(SELECTOR_KEY_PREFIX.length)] = normalized;
+        ruleCount += normalized.length;
+      });
+
+      if (ruleCount === 0) {
+        RetroAudio.playError();
+        showAlert('exportFailedTitle', 'exportEmptyMsg', '⚠️');
+        return;
+      }
+
+      const backup = {
+        format: BACKUP_FORMAT,
+        version: BACKUP_VERSION,
+        exportedAt: new Date().toISOString(),
+        rules
+      };
+
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: 'application/json'
+      });
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().slice(0, 10);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pageeraser-rules-${stamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Give the download a tick to start before the blob is released.
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+      RetroAudio.playSelection();
+      showAlert('exportSuccessTitle', 'exportSuccessMsg', '💾');
+    } catch (err) {
+      console.error('[PageEraser] Export failed:', err);
+      RetroAudio.playError();
+      showAlert('exportFailedTitle', 'exportFailedMsg', '❌');
+    }
+  }
+
+  function parseBackup(text) {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (parsed.format !== BACKUP_FORMAT) return null;
+    if (!parsed.rules || typeof parsed.rules !== 'object') return null;
+
+    const clean = {};
+    let ruleCount = 0;
+
+    Object.keys(parsed.rules).forEach(domain => {
+      // Domains become storage keys and scope which sites a rule touches, so
+      // only accept something that actually looks like a hostname.
+      if (typeof domain !== 'string' || domain.length > 253) return;
+      if (!/^[a-z0-9.-]+$/i.test(domain)) return;
+
+      const normalized = PE_normalizeRules(parsed.rules[domain]);
+      if (normalized.length === 0) return;
+      clean[domain] = normalized;
+      ruleCount += normalized.length;
+    });
+
+    return ruleCount > 0 ? clean : null;
+  }
+
+  async function importRules(file) {
+    try {
+      const text = await file.text();
+      const incoming = parseBackup(text);
+
+      if (!incoming) {
+        RetroAudio.playError();
+        showAlert('importFailedTitle', 'importFailedMsg', '❌');
+        return;
+      }
+
+      // Merge rather than replace: an import should never silently wipe rules
+      // for sites the backup does not mention.
+      const domains = Object.keys(incoming);
+      const keys = domains.map(d => SELECTOR_KEY_PREFIX + d);
+      const existing = await storage.get(keys);
+
+      const toSave = {};
+      let added = 0;
+
+      domains.forEach(domain => {
+        const key = SELECTOR_KEY_PREFIX + domain;
+        const current = PE_normalizeRules(existing[key] || []);
+        const merged = PE_normalizeRules([...current, ...incoming[domain]]);
+        added += merged.length - current.length;
+        toSave[key] = merged;
+      });
+
+      await storage.set(toSave);
+      await sendMessageToTab({ type: 'REFRESH_RULES', silent: true });
+      await refreshSelectorsList();
+
+      RetroAudio.playSelection();
+      showAlert('importSuccessTitle', 'importSuccessMsg', '✔️');
+      console.log(`[PageEraser] Imported ${added} new rule(s) across ${domains.length} domain(s).`);
+    } catch (err) {
+      console.error('[PageEraser] Import failed:', err);
+      RetroAudio.playError();
+      showAlert('importFailedTitle', 'importFailedMsg', '❌');
+    }
+  }
+
+  const importFileInput = document.getElementById('import-file-input');
+
+  document.getElementById('menu-item-export').addEventListener('click', () => {
+    closeAllDropdowns();
+    exportRules();
+  });
+
+  document.getElementById('menu-item-import').addEventListener('click', () => {
+    closeAllDropdowns();
+    importFileInput.click();
+  });
+
+  importFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    // Reset first so picking the same file twice still fires a change event.
+    e.target.value = '';
+    if (file) await importRules(file);
   });
 
   // Dropdown Action Bindings
@@ -600,7 +789,10 @@
     elements.forEach(el => {
       const key = el.getAttribute('data-i18n');
       if (LOCALES[currentLang] && LOCALES[currentLang][key] !== undefined) {
-        el.innerHTML = LOCALES[currentLang][key];
+        // {version} is filled from the manifest so the About box can never
+        // drift out of sync with the released version again.
+        el.innerHTML = LOCALES[currentLang][key]
+          .replace('{version}', chrome.runtime.getManifest().version);
       }
     });
 

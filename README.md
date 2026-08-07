@@ -8,14 +8,15 @@
 
 **Interactively select and permanently remove any element from any webpage.**
 
+[![CI](https://github.com/rildir/PageEraser/actions/workflows/ci.yml/badge.svg)](https://github.com/rildir/PageEraser/actions/workflows/ci.yml)
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-1.6.0-FF4757?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-1.6.1-FF4757?style=for-the-badge)]()
 
 *A Chrome/Edge extension wrapped in a nostalgic Windows 95 aesthetic — because cleaning up the web should be fun.*
 
-[Features](#-features) · [Installation](#-installation) · [Usage](#-usage) · [Keyboard Shortcuts](#-keyboard-shortcuts) · [Tech Stack](#-tech-stack) · [Contributing](#-contributing)
+[Features](#-features) · [Installation](#-installation) · [Usage](#-usage) · [Keyboard Shortcuts](#-keyboard-shortcuts) · [Architecture](docs/ARCHITECTURE.md) · [Changelog](CHANGELOG.md) · [Contributing](#-contributing)
 
 </div>
 
@@ -230,11 +231,17 @@ PageEraser/
 ├── popup.html             # Popup UI — Windows 95 themed interface
 ├── popup.css              # Popup styles — complete Win95 design system
 ├── popup.js               # Popup logic — rules management, theming, menus
+├── shared.js              # Shared helpers — domain scoping, selector validation
 ├── audio.js               # Sound synthesizer — Web Audio API retro effects
 ├── locales.js             # i18n — English & Turkish translations
 ├── clippy.js              # Clippy assistant — contextual tips & animations
 ├── tour.js                # Onboarding — 3-step guided spotlight tour
 ├── minesweeper.js         # Easter egg — classic Minesweeper game
+├── privacy-policy.html    # In-extension privacy policy (linked from About)
+├── build.ps1              # Packages a store-ready ZIP (dev files excluded)
+├── tests/run.js           # Test suite — no browser, no dependencies
+├── docs/ARCHITECTURE.md   # Design decisions, threat model, trade-offs
+├── .github/workflows/     # CI — tests, syntax check, packaged artifact
 ├── test.html              # Development test page with edge-case scenarios
 ├── mock-chrome.js         # Chrome extension API mocks for playground mode
 ├── icons/                 # Extension icons (16, 48, 128px)
@@ -268,14 +275,26 @@ Contributions are welcome! Here's how to get started:
 git clone https://github.com/rildir/PageEraser.git
 
 # Load as unpacked extension in Chrome
-# No build step needed — edit and reload!
+# No build step needed for development — edit and reload!
 
 # Test with the included test page
 # Open test.html in browser with the extension loaded
+
+# Run the test suite (selector validation, domain scoping, popup wiring)
+node tests/run.js
+
+# Package a store-ready ZIP into dist/ (development files excluded)
+powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
 > [!NOTE]
 > The extension is built with **zero dependencies**. Just clone and load — no `npm install` required.
+> `tests/run.js` and `build.ps1` need only Node and PowerShell, both already on a Windows dev machine.
+
+> [!IMPORTANT]
+> Always upload the ZIP produced by `build.ps1`, never a zip of the repository.
+> `test.html`, `mock-chrome.js`, `screenshots/` and this README must not ship —
+> every extra file is one more thing a store reviewer has to read and rule out.
 
 ---
 
