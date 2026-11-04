@@ -75,6 +75,10 @@
               <span data-i18n="paintWebpage">Paint Webpage</span>
               <span class="menu-shortcut">Alt+Shift+W</span>
             </div>
+            <div class="dropdown-item" id="menu-item-xray">
+              <span data-i18n="xrayBtn">Layout X-Ray</span>
+              <span class="menu-shortcut">Alt+Shift+X</span>
+            </div>
           </div>
         </div>
         <div class="menu-item-container">
@@ -196,6 +200,18 @@
               >Persist</label
             >
           </div>
+        </div>
+
+        <!-- Layout X-Ray -->
+        <div style="width: 100%; margin-top: 4px">
+          <button
+            class="win-btn"
+            id="btn-xray"
+            type="button"
+            style="width: 100%"
+          >
+            <span data-i18n="xrayBtn">Layout X-Ray</span>
+          </button>
         </div>
 
         <!-- Modified Elements sunken panel with search filter -->
@@ -323,6 +339,12 @@
             <span class="key-label">Alt+Shift+D</span>
             <span class="key-desc" data-i18n="restoreLayout"
               >Restore All Layout</span
+            >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Alt+Shift+X</span>
+            <span class="key-desc" data-i18n="toggleXray"
+              >Toggle Layout X-Ray</span
             >
           </div>
         </fieldset>

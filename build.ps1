@@ -24,6 +24,7 @@ $files = @(
     'shared.js',
     'modes/index.js',
     'modes/erase.js',
+    'modes/xray.js',
     'locales.js',
     'popup.html',
     'popup.css',

@@ -14,6 +14,7 @@
 
   /* ─── DOM References ─────────────────────────────────────── */
   const btnSelect     = document.getElementById('btn-select');
+  const btnXray       = document.getElementById('btn-xray');
   const btnReset      = document.getElementById('btn-reset');
   const domainNameEl  = document.getElementById('domain-name');
   const hiddenCountEl = document.getElementById('hidden-count');
@@ -154,11 +155,13 @@
         currentDomain = domainToUse;
         domainNameEl.textContent = currentDomain;
         btnSelect.disabled = false;
+        btnXray.disabled = false;
         await refreshSelectorsList();
       } else {
         currentDomain = '';
         domainNameEl.textContent = LOCALES[currentLang].cannotRun;
         btnSelect.disabled = true;
+        btnXray.disabled = true;
         btnReset.disabled = true;
         selectorsList.innerHTML = `<div class="empty-state">${LOCALES[currentLang].noElements}</div>`;
         hiddenCountEl.textContent = '0';
@@ -1076,6 +1079,17 @@
     // Clippy reacts
     ClippyAssistant.handleHover('maximizeDeny');
   });
+
+  // ─── Layout X-Ray ──────────────────────────────────────────
+  // Starting it from here (toolbar button) is what grants the extension
+  // activeTab on this page, which the overlay's Capture button relies on.
+  async function toggleXray() {
+    RetroAudio.playSelection();
+    await sendMessageToTab({ type: 'TOGGLE_XRAY' });
+    window.close();
+  }
+  btnXray.addEventListener('click', toggleXray);
+  document.getElementById('menu-item-xray').addEventListener('click', toggleXray);
 
   // ─── Paint Webpage Actions Menu Trigger ────────────────────
   const paintBtn = document.getElementById('menu-item-paint');

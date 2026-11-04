@@ -10,7 +10,8 @@
  *
  *   enter(opts)          start the mode; opts is whatever activate() received
  *   exit()               stop the mode and remove everything it put on the page
- *   onPointerMove(info)  { target, altKey } — at most one call per frame
+ *   onPointerMove(info)  { target, altKey, clientX, clientY } — at most one
+ *                        call per frame
  *   onClick(event)       click, window capture phase (a mode may preventDefault)
  *   onKey(event)         keydown, forwarded after the global shortcuts ran and
  *                        only when focus is not in a text field
@@ -118,7 +119,7 @@ class PE_ModeManager {
       this._listen(document, 'mousemove', (e) => {
         if (this._activeId !== id || this._ticking) return;
         this._ticking = true;
-        const info = { target: e.target, altKey: e.altKey };
+        const info = { target: e.target, altKey: e.altKey, clientX: e.clientX, clientY: e.clientY };
         requestAnimationFrame(() => {
           try {
             if (this._activeId === id) mode.onPointerMove(info);

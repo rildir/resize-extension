@@ -138,7 +138,8 @@ chrome.commands.onCommand.addListener(async (command) => {
     const messageTypes = {
       'start-selection': 'START_SELECTION',
       'reset-layout': 'RESET_SITE',
-      'start-paint': 'START_PAINT'
+      'start-paint': 'START_PAINT',
+      'toggle-xray': 'TOGGLE_XRAY'
     };
 
     const type = messageTypes[command];
@@ -176,6 +177,27 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     setBadge(tabId, count);
     writeBadgeCount(tabId, count);
   }
+});
+
+// ─── Layout X-Ray: screenshot of the visible tab ──────────
+// captureVisibleTab needs no extra permission: activeTab covers it, but only
+// once the user has invoked the extension on that tab (toolbar button, command
+// or context menu). Without that it rejects, and the content script explains.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || msg.type !== 'CAPTURE_TAB') return false;
+
+  const tab = sender.tab;
+  // Only a content script in a tab can ask, and only for the tab in front:
+  // captureVisibleTab shoots whatever is active in the window.
+  if (!tab || !tab.active) {
+    sendResponse({ error: 'Tab is not active' });
+    return false;
+  }
+
+  chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' })
+    .then((dataUrl) => sendResponse({ dataUrl }))
+    .catch((err) => sendResponse({ error: String((err && err.message) || err) }));
+  return true; // answer asynchronously
 });
 
 // ─── Clear badge when tab is closed ───────────────────────

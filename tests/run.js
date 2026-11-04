@@ -288,6 +288,14 @@ function freshPage() {
   flushFrames();
   check('a frame queued before deactivate does not reach the mode', moves, ['A', 'C']);
 
+  const seen = [];
+  const pm = new PE_ModeManager().register('xy', { enter() {}, exit() {}, onPointerMove: (i) => seen.push([i.clientX, i.clientY]) });
+  pm.activate('xy');
+  page.doc.fire('mousemove', { target: 'A', altKey: false, clientX: 12, clientY: 34 });
+  flushFrames();
+  check('pointer info carries the cursor position', seen, [[12, 34]]);
+  pm.deactivate();
+
   // keys
   const keys = [];
   mm = new PE_ModeManager()
@@ -324,7 +332,7 @@ function freshPage() {
 console.log('content scripts — load order, shipping, animation timing');
 const csJs = manifest.content_scripts[0].js;
 check('content scripts load shared.js, then the modes, then content.js',
-  csJs, ['shared.js', 'modes/index.js', 'modes/erase.js', 'content.js']);
+  csJs, ['shared.js', 'modes/index.js', 'modes/erase.js', 'modes/xray.js', 'content.js']);
 
 const shippedAll = [...buildScript.matchAll(/^\s*'([^']+)',?\s*$/gm)].map((m) => m[1]);
 check('every manifest content script is listed in build.ps1', csJs.filter((f) => !shippedAll.includes(f)), []);
@@ -348,6 +356,109 @@ const canSweepSrc = contentJs.slice(contentJs.indexOf('_canSweep(element) {'), c
 check('_canSweep skips elements that have their own mask', canSweepSrc.includes('this._hasOwnMask(element)'), true);
 check('_hasOwnMask reads maskImage and webkitMaskImage', /maskImage[^;]*webkitMaskImage|webkitMaskImage[^;]*maskImage/.test(contentJs.slice(contentJs.indexOf('_hasOwnMask(element) {'))), true);
 check('_beginRestoreSweeps skips elements that have their own mask', contentJs.includes('this._hasOwnMask(el)'), true);
+
+/* ─── 8. Layout X-Ray ────────────────────────────────────── */
+console.log('modes/xray.js — pure helpers and wiring');
+const X = require(path.join(ROOT, 'modes/xray.js'));
+
+[
+  ['flex', 'flex'], ['inline-flex', 'flex'], ['grid', 'grid'], ['inline-grid', 'grid'],
+  ['block', 'block'], ['flow-root', 'block'], ['list-item', 'block'],
+  ['inline-block', 'inline-block'], ['inline', 'other'], ['table', 'other'],
+  ['contents', 'other'], ['', 'other'], [null, 'other'], ['  FLEX ', 'flex']
+].forEach(([display, kind]) => check(`xrayKind(${JSON.stringify(display)})`, X.PE_xrayKind(display), kind));
+
+check('xrayPx reads px and nothing else',
+  [X.PE_xrayPx('12px'), X.PE_xrayPx('-3.5px'), X.PE_xrayPx('normal'), X.PE_xrayPx('10%'), X.PE_xrayPx(''), X.PE_xrayPx(null)],
+  [12, -3.5, 0, 0, 0, 0]);
+
+check('parseTracks: resolved px, line names ignored', X.PE_xrayParseTracks('[a] 100px [b] 200.5px'), [100, 200.5]);
+check('parseTracks: unresolved values give no tracks',
+  [X.PE_xrayParseTracks('1fr 1fr'), X.PE_xrayParseTracks('100px 50%'), X.PE_xrayParseTracks('none'),
+   X.PE_xrayParseTracks('subgrid'), X.PE_xrayParseTracks('')], [[], [], [], [], []]);
+
+check('gapPositions: both edges when wide, the middle when narrow',
+  [X.PE_xrayGapPositions(100, 16), X.PE_xrayGapPositions(100, 4)], [[100, 116], [102]]);
+
+// Grid: 3 columns with a narrow column gap, 2 rows with a wide row gap.
+const gridBox = { left: 10, top: 20, width: 310, height: 100 };
+check('grid gap lines', X.PE_xrayGridGapLines(gridBox, [100, 100, 100], [50, 50], 5, 10), [
+  { x1: 112.5, y1: 20, x2: 112.5, y2: 120 },
+  { x1: 217.5, y1: 20, x2: 217.5, y2: 120 },
+  { x1: 10, y1: 70, x2: 320, y2: 70 },
+  { x1: 10, y1: 80, x2: 320, y2: 80 }
+]);
+check('grid without gaps or a single track draws nothing',
+  [X.PE_xrayGridGapLines(gridBox, [100, 100], [50], 0, 0), X.PE_xrayGridGapLines(gridBox, [310], [100], 8, 8)], [[], []]);
+
+const flexBox = { left: 0, top: 0, width: 300, height: 50 };
+const a = { left: 0, top: 0, right: 100, bottom: 50 };
+const b = { left: 116, top: 0, right: 216, bottom: 50 };
+check('flex row: a gap that matches the declared size is drawn',
+  X.PE_xrayFlexGapLines(flexBox, 'row', [a, b], 16, 0),
+  [{ x1: 100, y1: 0, x2: 100, y2: 50 }, { x1: 116, y1: 0, x2: 116, y2: 50 }]);
+check('flex row: spacing that is not the gap (margins, justify-content) is not drawn',
+  X.PE_xrayFlexGapLines(flexBox, 'row', [a, { left: 140, top: 0, right: 240, bottom: 50 }], 16, 0), []);
+check('flex row-reverse: the children are in reverse visual order',
+  X.PE_xrayFlexGapLines(flexBox, 'row-reverse', [b, a], 16, 0),
+  [{ x1: 100, y1: 0, x2: 100, y2: 50 }, { x1: 116, y1: 0, x2: 116, y2: 50 }]);
+check('flex column: row gap between stacked children',
+  X.PE_xrayFlexGapLines({ left: 0, top: 0, width: 100, height: 200 }, 'column',
+    [{ left: 0, top: 0, right: 100, bottom: 40 }, { left: 0, top: 48, right: 100, bottom: 88 }], 0, 8),
+  [{ x1: 0, y1: 40, x2: 100, y2: 40 }, { x1: 0, y1: 48, x2: 100, y2: 48 }]);
+check('flex wrap: the gap between two lines spans the container',
+  X.PE_xrayFlexGapLines({ left: 0, top: 0, width: 300, height: 100 }, 'row',
+    [{ left: 0, top: 0, right: 100, bottom: 40 }, { left: 0, top: 46, right: 100, bottom: 86 }], 10, 6),
+  [{ x1: 0, y1: 40, x2: 300, y2: 40 }, { x1: 0, y1: 46, x2: 300, y2: 46 }]);
+
+check('label: grid with columns, rows and both gaps', X.PE_xrayLabelText({
+  tag: 'DIV', id: 'hero', classes: ['card', 'wide'], width: 320.04, height: 180, display: 'grid',
+  cols: 3, rows: 2, colGap: 16, rowGap: 8
+}), 'div#hero.card.wide · 320 × 180 · grid · 3 cols · 2 rows · gap 8px 16px');
+check('label: flex with one gap value', X.PE_xrayLabelText({
+  tag: 'ul', id: '', classes: [], width: 100, height: 20.26, display: 'flex', cols: 0, rows: 0, colGap: 12, rowGap: 12
+}), 'ul · 100 × 20.3 · flex · gap 12px');
+check('label: plain block shows no gap or columns', X.PE_xrayLabelText({
+  tag: 'p', classes: ['a', 'b', 'c', 'd'], width: 5, height: 5, display: 'block'
+}), 'p.a.b.c · 5 × 5 · block');
+check('label: a very long name is cut',
+  X.PE_xrayLabelText({ tag: 'div', classes: ['x'.repeat(80)], width: 1, height: 1, display: 'block' }).split(' · ')[0].length, 48);
+
+// Wiring
+const xrayJs = read('modes/xray.js');
+const bgJs = read('background.js');
+check('manifest has the Alt+Shift+X command',
+  manifest.commands['toggle-xray'] && manifest.commands['toggle-xray'].suggested_key.default, 'Alt+Shift+X');
+check('background forwards the command and answers CAPTURE_TAB',
+  ["'toggle-xray': 'TOGGLE_XRAY'", "'CAPTURE_TAB'", 'captureVisibleTab'].filter((s) => !bgJs.includes(s)), []);
+check('content.js handles TOGGLE_XRAY, the fallback shortcut and Esc',
+  ["case 'TOGGLE_XRAY'", "keyUpper === 'X'", "this.modes.isActive('xray')"].filter((s) => !contentJs.includes(s)), []);
+check('X-Ray never talks to a server or the downloads API',
+  /fetch\(|XMLHttpRequest|sendBeacon|WebSocket|chrome\.downloads|https?:\/\//.test(xrayJs), false);
+check('X-Ray does not touch the page elements it measures',
+  /\.(classList\.(add|remove|toggle)|setAttribute|removeAttribute)\(|\.style\.[a-zA-Z]+\s*=/.test(
+    // only the lines that work on the measured elements, not our own nodes
+    xrayJs.split('\n').filter((l) => /(?:^|[^a-zA-Z])(el|child|target|hovered)\.(classList|setAttribute|removeAttribute|style)/.test(l)).join('\n')
+  ), false);
+check('X-Ray adds no new permission', manifest.permissions.slice().sort(), ['activeTab', 'contextMenus', 'storage']);
+
+// The chip colours in content.css are the same ones the canvas draws with.
+const missingColors = Object.entries(X.PE_XRAY_COLORS)
+  .filter(([kind, hex]) => kind !== 'other' && !contentCss.toLowerCase().includes(hex.toLowerCase()))
+  .map(([kind]) => kind);
+check('legend colours in content.css match PE_XRAY_COLORS', missingColors, []);
+check('X-Ray default depth is 4 and the slider range is 1-10', [X.PE_XRAY_DEFAULT_DEPTH, X.PE_XRAY_MAX_DEPTH], [4, 10]);
+
+check('xray: near zone covers the viewport and one viewport of scroll in every direction', [
+  X.PE_xrayInNearZone({ left: 0, top: 0, right: 10, bottom: 10 }, 1000, 800),
+  X.PE_xrayInNearZone({ left: 0, top: 2399, right: 10, bottom: 2500 }, 1000, 800),
+  X.PE_xrayInNearZone({ left: 0, top: 2401, right: 10, bottom: 2500 }, 1000, 800),
+  X.PE_xrayInNearZone({ left: 0, top: -1700, right: 10, bottom: -1599 }, 1000, 800),
+  X.PE_xrayInNearZone({ left: 0, top: -1800, right: 10, bottom: -1601 }, 1000, 800),
+  X.PE_xrayInNearZone({ left: 3001, top: 0, right: 3100, bottom: 10 }, 1000, 800)
+], [true, true, false, true, false, false]);
+const xraySrc = read('modes/xray.js');
+check('xray: toolbar is anchored by left (draggable on RTL pages)', /toolbar\.style\.setProperty\('right', 'auto', 'important'\)/.test(xraySrc), true);
 
 /* ─── Result ─────────────────────────────────────────────── */
 console.log('');

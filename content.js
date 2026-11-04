@@ -254,6 +254,7 @@
           if (this._stopPaintFn) this._stopPaintFn();
         }
       });
+      this.modes.register('xray', PE_createXrayMode(this));
 
       // Selectors whose erase sweep is still playing. Their stylesheet rule is
       // held back until the wipe finishes, otherwise the rule would hide the
@@ -343,6 +344,40 @@
     // Used by modes/erase.js, which cannot reach the audio engine directly.
     _playSelectionSound() {
       RetroAudio.playSelection();
+    }
+
+    // Small settings access for modes, which cannot reach the storage facade.
+    async _getSetting(key, fallback) {
+      const data = await storage.get(key);
+      return data[key] === undefined ? fallback : data[key];
+    }
+
+    _saveSetting(key, value) {
+      return storage.set({ [key]: value });
+    }
+
+    /* Layout X-Ray's Capture: ask the service worker for a screenshot of the
+     * visible tab. Always resolves — { dataUrl } or { error } — never rejects. */
+    _captureTab() {
+      return new Promise((resolve) => {
+        if (!isContextAlive()) {
+          noteContextLost();
+          resolve({ error: 'Extension context lost' });
+          return;
+        }
+        try {
+          chrome.runtime.sendMessage({ type: 'CAPTURE_TAB' }, (response) => {
+            if (chrome.runtime.lastError) {
+              resolve({ error: chrome.runtime.lastError.message });
+              return;
+            }
+            resolve(response || { error: 'No response' });
+          });
+        } catch (err) {
+          noteContextLost();
+          resolve({ error: String(err && err.message || err) });
+        }
+      });
     }
 
     /* ─── Eraser Sweep Animation ────────────────────────────────
@@ -542,6 +577,10 @@
     _teardownOnContextLoss() {
       try {
         if (this.active) this._stopSelectionMode();
+      } catch (err) { /* best effort */ }
+      try {
+        // X-Ray's exit() only removes its own nodes; it needs no chrome.* call.
+        if (this.modes.isActive('xray')) this.modes.deactivate();
       } catch (err) { /* best effort */ }
 
       // Note: #pe-stylesheet is deliberately left in place. The user asked for
@@ -1047,6 +1086,10 @@
             e.preventDefault();
             this._startPaintMode();
             return;
+          } else if (keyUpper === 'X') {
+            e.preventDefault();
+            this.modes.toggle('xray');
+            return;
           }
         }
 
@@ -1075,6 +1118,10 @@
           e.preventDefault();
           if (this._stopPaintFn) {
             this._stopPaintFn();
+            return;
+          }
+          if (this.modes.isActive('xray')) {
+            this.modes.deactivate();
             return;
           }
           if (this.active) {
@@ -1115,7 +1162,7 @@
               sendResponse({ success: true });
               break;
             case 'GET_STATUS':
-              sendResponse({ active: this.active });
+              sendResponse({ active: this.active, xray: this.modes.isActive('xray') });
               break;
             case 'RESTORE_SELECTOR':
               this._restoreSelector(msg.selector, msg.silent).then(() => {
@@ -1165,6 +1212,10 @@
             case 'START_PAINT':
               this._startPaintMode();
               sendResponse({ success: true });
+              break;
+            case 'TOGGLE_XRAY':
+              this.modes.toggle('xray');
+              sendResponse({ success: true, active: this.modes.isActive('xray') });
               break;
             default:
               sendResponse({ success: false });
