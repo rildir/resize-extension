@@ -4,6 +4,55 @@ All notable changes to PageEraser are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] — 2026-11-04
+
+### Added
+
+- **Eraser wipe.** An erased element is scraped away left to right over 350 ms
+  instead of vanishing, and *Restore* plays the same wipe backwards. It is a CSS
+  `mask-image` on the element itself — no canvas, no clone. It is skipped under
+  `prefers-reduced-motion`, for elements that are off-screen, zero-sized,
+  `display: contents` or SVG, when more than six wipes are already running, and
+  on a bulk restore of more than six elements. Clippy's chomp animation is
+  unchanged and still takes over while Clippy is on screen.
+- **Win95 Recycle Bin.** The bin is now a pixel-style icon that shows *empty* or
+  *full* according to whether anything is left to restore. Each rule has a ✕
+  button (Win95-style Yes/No confirmation, focus on *No*) that deletes it
+  permanently: the element stays hidden, but the rule leaves the bin and
+  Ctrl+Z no longer brings it back. *Restore All Layout* still clears every rule,
+  permanent or not.
+- **Mode manager** (`modes/index.js`). Interactive tools are now modes with a
+  common `enter / exit / onPointerMove / onClick / onKey` interface, and only
+  one runs at a time. The element picker moved to `modes/erase.js` unchanged
+  in behaviour; Paintbrush 95 is registered as a mode too. This is the base the
+  next features build on.
+
+### Changed
+
+- Starting Paintbrush 95 while the element picker is active now ends the picker
+  first (they could previously both run at once).
+- Dragging a rule onto the Recycle Bin no longer flashes the icon to *full* for
+  1.5 s; the icon follows the actual contents instead.
+- Stored rules may carry `permanent: true`. Older versions ignore the flag, so a
+  downgrade simply lists those rules in the bin again.
+- `build.ps1` now keeps relative paths when staging, so the `modes/` folder
+  survives packaging.
+
+### Fixed
+
+- **Large-text popup.** With *Large text* on, the new ✕ button left the selector
+  text no width at all and pushed the Edit / Restore / ✕ buttons out of the
+  list row. Rows now wrap, with the buttons on their own line.
+
+### Known limitations
+
+- Elements whose children overflow their box (dropdown menus, tooltips) lose
+  those children the moment the erase wipe starts, because a mask clips to the
+  element's border box. The element itself still wipes normally.
+- A page reload briefly shows an erased element for one or two frames before
+  its rule applies (storage is read asynchronously). Unchanged from 1.6.1;
+  fixing it needs additional permissions and is tracked separately.
+
 ## [1.6.1] — 2026-08-07
 
 ### Fixed

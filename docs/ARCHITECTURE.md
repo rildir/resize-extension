@@ -63,6 +63,25 @@ That warning is intrinsic, not incidental — see §6.
 selector is safe to inject. Both used to have their own copy of the domain
 logic. See §4 for what that cost.
 
+`modes/` holds the interactive tools. Each tool — the element picker, Paintbrush
+95, and whatever comes next — is a *mode*: an object with `enter()` and `exit()`
+and optional `onPointerMove`, `onClick`, `onKey` and `onModifier` hooks.
+`modes/index.js` (`PE_ModeManager`) is the only code that registers page-level
+listeners for them. It attaches a listener only for the hooks the active mode
+defines, removes them all when the mode ends, and refuses to run two modes at
+once, so a mode cannot leave a stale handler behind or fight another for the
+same click. `modes/erase.js` is the element picker. A mode that ends on its own
+(paint's close button) tells the manager with `release()`. The three files load
+in order before `content.js`; they are classic scripts sharing one global scope,
+like `shared.js`.
+
+The eraser wipe is not a mode: it is a CSS `mask-image` animation
+(`.pe-erasing` / `.pe-restoring` in `content.css`) that `content.js` adds to the
+element for 350 ms. While it plays, the element's stylesheet rule is held back
+(`_sweeping`), because the rule would hide the element instantly and leave
+nothing to animate; once it ends the inline hide is applied and the rule is
+re-applied.
+
 ---
 
 ## 3. Security model
@@ -246,11 +265,23 @@ strings.
 library would make the rule list cleaner; it would also be the single largest
 dependency in a project whose selling point is that it has none.
 
+**Erase wipe clips overflowing children.** The wipe is a CSS mask, and a mask
+clips to the element's border box, so children that overflow it (dropdown
+menus, tooltips) disappear the moment the wipe starts; the element itself
+still wipes normally. Elements that carry their own mask are not wiped at all
+and take the instant-hide path, because the sweep class would override that
+mask and it would pop back afterwards.
+
+**One-to-two-frame flash on reload.** An erased element can be visible for a
+frame or two after a reload, before its rule is applied: the content script
+reads storage asynchronously. This is unchanged from 1.6.1. Fixing it needs
+additional permissions, so it is tracked separately.
+
 ---
 
 ## 8. Testing
 
-`node tests/run.js` — no browser, no dependencies, 55 checks:
+`node tests/run.js` — no browser, no dependencies, 84 checks:
 
 - **Unit tests** for `shared.js`: selector validation (including the
   `CSS.escape` case and each injection vector), domain scoping (with a
@@ -264,13 +295,21 @@ dependency in a project whose selling point is that it has none.
   - every `data-i18n` key exists in **both** languages;
   - every manifest- and popup-referenced file exists and is in the shipping list;
   - every `target="_blank"` link carries `rel="noopener"`;
-  - the manifest declares no `host_permissions` and exactly three permissions.
+  - the manifest declares no `host_permissions` and exactly three permissions;
+  - the content scripts load `shared.js`, then `modes/`, then `content.js`, and
+    every one of them is in the shipping list;
+  - the wipe length in `content.js` equals the one in `content.css`, sits in the
+    300–400 ms range, and honours `prefers-reduced-motion`.
+- **Unit tests** for the mode manager against a fake page: one mode at a time,
+  listeners attached only for defined hooks and all removed on exit, pointer
+  moves throttled to one per frame, no call into a mode after it has ended,
+  `release()` and a failing `enter()` leaving nothing behind.
 
 `build.ps1` runs the suite and refuses to package a failing build. CI runs the
 same on every push and uploads the packaged ZIP as an artifact.
 
 What is **not** covered: anything requiring a real browser — actual injection
-timing, paint mode, cross-browser rendering. Those are manual. A Puppeteer
+timing, the wipe animation itself, paint mode, cross-browser rendering. Those are manual. A Puppeteer
 harness loading the unpacked extension is the obvious next step.
 
 ---

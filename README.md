@@ -12,7 +12,7 @@
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-1.6.1-FF4757?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-1.7.0-FF4757?style=for-the-badge)]()
 
 *A Chrome/Edge extension wrapped in a nostalgic Windows 95 aesthetic — because cleaning up the web should be fun.*
 
@@ -68,6 +68,7 @@
 | Feature | Description |
 |---------|------------|
 | **Smart Element Selection** | Click any element to erase it with a precision crosshair cursor |
+| **Eraser Wipe** | Erased elements are scraped away left to right in 350 ms (and wiped back in on restore); off under reduced-motion |
 | **Stretch to Full Width** | `Alt+Click` any element to stretch it to 100% width (remove max-width constraints) |
 | **Persistent Rules** | Erased elements stay hidden across page reloads and browser restarts |
 | **Per-Domain Storage** | Rules are scoped per website domain with optional subdomain support |
@@ -178,7 +179,8 @@ Right-click any element on a page to access:
 - **Filter** rules by typing in the search box
 - **Edit** selectors inline for fine-tuning
 - **Restore** individual elements or reset the entire site
-- **Drag** rules to the Recycle Bin to restore them
+- **Delete permanently** (✕) takes a rule out of the Recycle Bin: the element stays hidden but can no longer be restored one by one. *Restore All Layout* still clears everything
+- **Drag** rules to the Recycle Bin to restore them — the bin shows as full while there is something to restore
 - **Import/Export** rules as JSON backups via File menu
 
 ---
