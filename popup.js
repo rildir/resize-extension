@@ -198,29 +198,45 @@
       const data = await storage.get(key);
       allSelectors = data[key] || [];
 
-      // Update badge count
+      // Update badge count (everything hidden on this site, bin or not)
       hiddenCountEl.textContent = allSelectors.length;
 
       // Update reset button state
       btnReset.disabled = allSelectors.length === 0;
 
       applyFilter();
+      updateRecycleBinIcon();
     } catch (err) {
       console.log('[PageEraser] Status listing selectors:', err);
     }
   }
 
+  /* What the Recycle Bin holds: every rule except those deleted for good. */
+  function binItems() {
+    return allSelectors.filter(itemData => !(itemData && itemData.permanent === true));
+  }
+
+  /* Full while there is something to restore, empty otherwise. */
+  function updateRecycleBinIcon() {
+    const icon = document.getElementById('recycle-bin-icon');
+    if (!icon) return;
+    const full = binItems().length > 0;
+    icon.classList.toggle('full', full);
+    icon.classList.toggle('empty', !full);
+  }
+
   function applyFilter() {
     selectorsList.innerHTML = '';
     const query = filterInput.value.toLowerCase().trim();
-    
-    const filtered = allSelectors.filter(itemData => {
+    const inBin = binItems();
+
+    const filtered = inBin.filter(itemData => {
       const selector = typeof itemData === 'string' ? itemData : itemData.selector;
       return selector.toLowerCase().includes(query);
     });
 
     if (filtered.length === 0) {
-      const msg = allSelectors.length === 0 ? LOCALES[currentLang].noElements : LOCALES[currentLang].noMatches;
+      const msg = inBin.length === 0 ? LOCALES[currentLang].noElements : LOCALES[currentLang].noMatches;
       selectorsList.innerHTML = `<div class="empty-state">${msg}</div>`;
       return;
     }
@@ -272,6 +288,12 @@
       restoreBtn.className = 'win-btn win-btn-sm';
       restoreBtn.title = currentLang === 'en' ? 'Restore element' : 'Elementi geri yükle';
       restoreBtn.innerHTML = `<span>${LOCALES[currentLang].restoreBtn}</span>`;
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'win-btn win-btn-sm';
+      deleteBtn.title = LOCALES[currentLang].deleteForeverBtn;
+      deleteBtn.setAttribute('aria-label', LOCALES[currentLang].deleteForeverBtn);
+      deleteBtn.innerHTML = '<span>✕</span>';
 
       // Inline selector editing logic
       editBtn.addEventListener('click', () => {
@@ -359,8 +381,28 @@
         await refreshSelectorsList();
       });
 
+      // Delete permanently: the rule stays (the element stays hidden) but it
+      // leaves the bin, so it can no longer be restored one by one.
+      deleteBtn.addEventListener('click', async () => {
+        const confirmed = await askConfirm('confirmDeleteTitle', 'confirmDeleteMessage', selectorStr);
+        if (!confirmed) return;
+
+        const key = `pe_selectors_${currentDomain}`;
+        const data = await storage.get(key);
+        const selectors = (data[key] || []).map(rule => {
+          const sel = typeof rule === 'string' ? rule : rule.selector;
+          if (sel !== selectorStr) return rule;
+          return { selector: sel, action: typeof rule === 'string' ? 'hide' : rule.action, permanent: true };
+        });
+        await storage.set({ [key]: selectors });
+
+        RetroAudio.playTrash();
+        await refreshSelectorsList();
+      });
+
       controlsContainer.appendChild(editBtn);
       controlsContainer.appendChild(restoreBtn);
+      controlsContainer.appendChild(deleteBtn);
 
       item.appendChild(actionBadge);
       item.appendChild(text);
@@ -444,6 +486,66 @@
       // "keep it here".
       e.preventDefault();
       alertOkBtn.focus();
+    }
+  }, true);
+
+  /* ─── Confirm Dialog ─────────────────────────────────────── */
+  const confirmOverlay = document.getElementById('confirm-overlay');
+  const confirmTitleEl = document.getElementById('confirm-title');
+  const confirmMessageEl = document.getElementById('confirm-message');
+  const confirmDetailEl = document.getElementById('confirm-detail');
+  const confirmYesBtn = document.getElementById('btn-yes-confirm');
+  const confirmNoBtn = document.getElementById('btn-no-confirm');
+  let confirmResolve = null;
+  let confirmPreviousFocus = null;
+
+  function isConfirmOpen() {
+    return confirmOverlay.style.display === 'flex';
+  }
+
+  /* Resolves true on Yes, false on No / Esc / the close button. Focus starts
+   * on No, so a stray Enter can never delete anything. */
+  function askConfirm(titleKey, messageKey, detail = '') {
+    const t = LOCALES[currentLang];
+    confirmTitleEl.textContent = t[titleKey] || titleKey;
+    confirmMessageEl.textContent = t[messageKey] || messageKey;
+    confirmDetailEl.textContent = detail;
+    confirmDetailEl.title = detail;
+    confirmPreviousFocus = document.activeElement;
+    confirmOverlay.style.display = 'flex';
+    confirmNoBtn.focus();
+    return new Promise((resolve) => {
+      confirmResolve = resolve;
+    });
+  }
+
+  function closeConfirm(result) {
+    confirmOverlay.style.display = 'none';
+    if (confirmPreviousFocus && confirmPreviousFocus.focus) confirmPreviousFocus.focus();
+    confirmPreviousFocus = null;
+    const resolve = confirmResolve;
+    confirmResolve = null;
+    if (resolve) resolve(result);
+  }
+
+  confirmYesBtn.addEventListener('click', () => closeConfirm(true));
+  confirmNoBtn.addEventListener('click', () => closeConfirm(false));
+  document.getElementById('btn-close-confirm').addEventListener('click', () => closeConfirm(false));
+
+  // Same rules as the alert dialog: operable from the keyboard, focus kept
+  // inside, capture phase so it wins over the shortcut handlers below.
+  document.addEventListener('keydown', (e) => {
+    if (!isConfirmOpen()) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeConfirm(false);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      (document.activeElement === confirmNoBtn ? confirmYesBtn : confirmNoBtn).focus();
+    } else if (e.key === 'Enter') {
+      // Let the focused button handle it; just keep it from reaching the rest.
+      e.stopPropagation();
     }
   }, true);
 
@@ -1106,7 +1208,6 @@
 
   // ─── Recycle Bin Drag & Drop Listeners ────────────────────
   const recycleBin = document.getElementById('recycle-bin-container');
-  const recycleBinIcon = document.getElementById('recycle-bin-icon');
 
   if (recycleBin) {
     recycleBin.addEventListener('dragover', (e) => {
@@ -1128,10 +1229,6 @@
       // Play trash crumpling audio
       RetroAudio.playTrash();
 
-      // Show full recycle bin icon state
-      recycleBinIcon.classList.remove('empty');
-      recycleBinIcon.classList.add('full');
-
       // Update storage and notify tab
       const key = `pe_selectors_${currentDomain}`;
       const data = await storage.get(key);
@@ -1143,13 +1240,8 @@
       await storage.set({ [key]: selectors });
 
       await sendMessageToTab({ type: 'RESTORE_SELECTOR', selector: selectorStr, silent: true });
+      // The refresh also redraws the bin: empty once the last item is gone.
       await refreshSelectorsList();
-
-      // Revert bin icon back to empty after a delay
-      setTimeout(() => {
-        recycleBinIcon.classList.remove('full');
-        recycleBinIcon.classList.add('empty');
-      }, 1500);
     });
 
     // Double-click Recycle Bin to Empty/Reset

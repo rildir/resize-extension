@@ -602,3 +602,58 @@
 .pe-clippy-drawing:hover .pe-clippy-svg {
   transform: translateY(-5px) rotate(-3deg) !important;
 }
+
+/* ─── Eraser sweep ──────────────────────────────────────────
+ * Erase and Restore wipe the element with a mask instead of popping it in or
+ * out. The mask image is twice the element's width: a hard-edged boundary in
+ * its middle slides across as the position animates, and everything left of
+ * the boundary is masked away. The position overshoots 10% at each end so the
+ * soft edge starts and finishes fully outside the element — no flash on the
+ * first or last frame.
+ *
+ * The classes are added to the page's own element by content.js for the length
+ * of the animation and removed again afterwards.
+ *
+ * 350ms must match PE_SWEEP_MS in content.js (tests/run.js enforces it).
+ */
+@keyframes pe-erase-sweep {
+  from {
+    -webkit-mask-position: 110% 0;
+    mask-position: 110% 0;
+  }
+  to {
+    -webkit-mask-position: -10% 0;
+    mask-position: -10% 0;
+  }
+}
+
+.pe-erasing,
+.pe-restoring {
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 46%, #000 54%, #000 100%) !important;
+  mask-image: linear-gradient(to right, transparent 0%, transparent 46%, #000 54%, #000 100%) !important;
+  -webkit-mask-size: 200% 100% !important;
+  mask-size: 200% 100% !important;
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  animation-name: pe-erase-sweep !important;
+  animation-duration: 350ms !important;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  animation-fill-mode: both !important;
+  pointer-events: none !important;
+}
+
+/* Restore is the same wipe played backwards. */
+.pe-restoring {
+  animation-direction: reverse !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pe-erasing,
+  .pe-restoring {
+    animation: none !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+}

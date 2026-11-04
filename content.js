@@ -11,6 +11,16 @@
 
   const DEBUG = false;
 
+  // Eraser sweep animation. content.css (.pe-erasing / .pe-restoring) plays
+  // the same 350ms — keep the two in step; tests/run.js checks that they are.
+  const PE_SWEEP_MS = 350;
+  // Concurrent sweeps allowed before the effect is skipped.
+  const PE_SWEEP_MAX_ACTIVE = 6;
+  // Restoring more elements than this in one go (Restore All on a busy site)
+  // skips the effect entirely rather than masking dozens of subtrees at once.
+  const PE_SWEEP_BULK_LIMIT = 6;
+  const PE_XHTML_NS = 'http://www.w3.org/1999/xhtml';
+
   /* ─── Extension Context Guard ───────────────────────────────
    * When the extension is reloaded, updated or disabled, every content script
    * already running in an open tab is orphaned: `chrome.runtime.id` becomes
@@ -230,10 +240,26 @@
       this.highlighterEl = null;
       this.tooltipEl = null;
 
-      // Event handlers (stored for removal)
-      this._mouseMoveHandler = null;
-      this._clickCaptureHandler = null;
-      this._ticking = false;
+      // Modes. The manager owns the page-level listeners and guarantees that
+      // only one mode is active at a time — see modes/index.js.
+      this.modes = new PE_ModeManager();
+      this.modes.register('erase', PE_createEraseMode(this));
+      this.modes.register('paint', {
+        enter: () => {
+          this._enterPaintMode();
+          // Nothing opened (a canvas was already there): don't stay "active".
+          if (!this._stopPaintFn) this.modes.release('paint');
+        },
+        exit: () => {
+          if (this._stopPaintFn) this._stopPaintFn();
+        }
+      });
+
+      // Selectors whose erase sweep is still playing. Their stylesheet rule is
+      // held back until the wipe finishes, otherwise the rule would hide the
+      // element instantly and there would be nothing left to animate.
+      this._sweeping = new Set();
+      this._activeSweeps = 0;
 
       // Track last right-clicked element for Context Menus
       document.addEventListener('contextmenu', (e) => {
@@ -314,6 +340,115 @@
       if (DEBUG) console.log('[PageEraser]', ...args);
     }
 
+    // Used by modes/erase.js, which cannot reach the audio engine directly.
+    _playSelectionSound() {
+      RetroAudio.playSelection();
+    }
+
+    /* ─── Eraser Sweep Animation ────────────────────────────────
+     * A 350ms wipe, left to right, done with a CSS mask on the element itself
+     * (see .pe-erasing in content.css) — no canvas, no clone. Anything that
+     * cannot be wiped cleanly falls back to the old instant hide. */
+
+    _prefersReducedMotion() {
+      try {
+        return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    _canSweep(element) {
+      if (this._prefersReducedMotion()) return false;
+      if (this._activeSweeps >= PE_SWEEP_MAX_ACTIVE) return false;
+      if (!element || !element.isConnected || element.namespaceURI !== PE_XHTML_NS) return false;
+
+      const display = window.getComputedStyle(element).display;
+      if (display === 'none' || display === 'contents') return false;
+      // The sweep class overrides mask-image with !important, and the element's
+      // own mask would pop back when the class comes off: leave those alone.
+      if (this._hasOwnMask(element)) return false;
+
+      // Nobody sees an off-screen element being wiped, and a mask on a huge
+      // subtree is not free: skip both.
+      const r = element.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) return false;
+      return r.bottom > 0 && r.right > 0 && r.top < window.innerHeight && r.left < window.innerWidth;
+    }
+
+    _hasOwnMask(element) {
+      const cs = window.getComputedStyle(element);
+      const mask = cs.maskImage || cs.webkitMaskImage;
+      return !!mask && mask !== 'none';
+    }
+
+    /* Adds the sweep class and resolves when the animation is over (or the
+     * safety timer fires — display:contents, a page that removes the node, and
+     * a backgrounded tab all mean animationend never arrives). */
+    _playSweep(element, kind) {
+      return new Promise((resolve) => {
+        const cls = kind === 'restore' ? 'pe-restoring' : 'pe-erasing';
+        let finished = false;
+        let timer = null;
+        this._activeSweeps++;
+
+        const onEnd = (e) => {
+          if (e.target === element && e.animationName === 'pe-erase-sweep') finish();
+        };
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          element.removeEventListener('animationend', onEnd);
+          element.classList.remove(cls);
+          this._activeSweeps--;
+          resolve();
+        };
+
+        element.addEventListener('animationend', onEnd);
+        timer = setTimeout(finish, PE_SWEEP_MS + 200);
+        element.classList.add(cls);
+      });
+    }
+
+    _sweepErase(element, selector) {
+      this._sweeping.add(selector);
+      this._playSweep(element, 'erase').then(() => {
+        // Restored (or reset) while the wipe was playing: leave it alone.
+        if (!this._sweeping.has(selector)) return;
+        this._sweeping.delete(selector);
+        element.style.setProperty('display', 'none', 'important');
+        // Let the stylesheet take over, now that the rule may apply.
+        this._loadAndApplyErasedElements();
+      });
+    }
+
+    /* Call right before un-hiding. Masks every currently hidden match so the
+     * wipe plays in reverse as it reappears. A bulk restore skips the effect. */
+    _beginRestoreSweeps(selectors) {
+      if (this._prefersReducedMotion()) return;
+
+      const targets = [];
+      for (const sel of selectors) {
+        let found;
+        try {
+          found = document.querySelectorAll(sel);
+        } catch (e) {
+          continue; // not a valid selector any more
+        }
+        for (const el of found) {
+          if (el.namespaceURI !== PE_XHTML_NS) continue;
+          // Stretch rules leave the element visible: nothing to wipe in.
+          if (window.getComputedStyle(el).display !== 'none') continue;
+          // Same reason as _canSweep: do not override a mask the page set.
+          if (this._hasOwnMask(el)) continue;
+          targets.push(el);
+          if (targets.length > PE_SWEEP_BULK_LIMIT) return;
+        }
+      }
+      targets.forEach(el => this._playSweep(el, 'restore'));
+    }
+
     /* ─── Persistent CSS Hiding ──────────────────────────────── */
 
     async _getDomain() {
@@ -359,7 +494,13 @@
         this._updateBadge(0);
         return;
       }
-      const cssRules = safeRules.map(item => {
+      // A rule whose erase sweep is still playing is held back until it ends
+      // (_sweepErase re-applies afterwards). The badge still counts it.
+      const liveRules = this._sweeping.size
+        ? safeRules.filter(r => !(r.action === 'hide' && this._sweeping.has(r.selector)))
+        : safeRules;
+
+      const cssRules = liveRules.map(item => {
         const sel = item.selector;
         const act = item.action;
 
@@ -415,124 +556,19 @@
       document.querySelectorAll('.pe-highlighter').forEach(el => el.remove());
       this.highlighterEl = null;
       this.tooltipEl = null;
+      this.modes.release('paint');
     }
 
     /* ─── Selection Mode ────────────────────────────────────── */
 
+    /* The picker itself lives in modes/erase.js; these keep the existing
+     * entry points (messages, shortcuts, _eraseElement) working unchanged. */
     _startSelectionMode(silent = false) {
-      if (this.active) return;
-      this.active = true;
-      this._altPressed = false;
-      if (!silent) {
-        RetroAudio.playSelection();
-      }
-
-      // Create overlay nodes dynamically inside body
-      this._ensureHighlighterElements();
-
-      // Mouse movements to track hover
-      this._mouseMoveHandler = (e) => {
-        if (!this.active) return;
-        if (this._ticking) return;
-        this._ticking = true;
-        
-        const target = e.target;
-        const altKey = e.altKey;
-        
-        requestAnimationFrame(() => {
-          this._handleMouseMove({ target, altKey });
-          this._ticking = false;
-        });
-      };
-      document.addEventListener('mousemove', this._mouseMoveHandler, { passive: true });
-
-      // Click capture to intercept erasure trigger
-      this._clickCaptureHandler = (e) => {
-        if (!this.active) return;
-
-        const targetEl = e.target;
-        if (!targetEl) return;
-
-        // Ignore clicks on our own injected elements
-        if (targetEl.closest('.pe-clippy-buddy') || 
-            targetEl.closest('.pe-highlighter') || 
-            targetEl.closest('.pe-toast-container') ||
-            targetEl.closest('#pe-paint-toolbox') ||
-            targetEl.closest('#pe-paint-canvas') ||
-            targetEl.id === 'pe-stylesheet') {
-          return;
-        }
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        const elementToErase = this.selectedElement && this.selectedElement.nodeType === Node.ELEMENT_NODE 
-          ? this.selectedElement 
-          : targetEl;
-
-        if (elementToErase && elementToErase !== document.body && elementToErase !== document.documentElement) {
-          const action = e.altKey ? 'stretch' : 'hide';
-          this._eraseElement(elementToErase, action);
-        }
-      };
-      window.addEventListener('click', this._clickCaptureHandler, true);
-
-      // Alt key listener to dynamically update highlighter borders & tooltip
-      this._altKeyHandler = (e) => {
-        if (this._altPressed !== e.altKey) {
-          this._altPressed = e.altKey;
-          this._updateHighlight();
-        }
-      };
-      window.addEventListener('keydown', this._altKeyHandler, true);
-      window.addEventListener('keyup', this._altKeyHandler, true);
-
-      // Add dynamic selection cursor style
-      if (document.body) {
-        document.body.style.setProperty('cursor', 'crosshair', 'important');
-      }
-
-      this._injectClippy();
+      this.modes.activate('erase', { silent });
     }
 
     _stopSelectionMode() {
-      if (!this.active) return;
-      this.active = false;
-
-      // Clean up event listeners
-      if (this._mouseMoveHandler) {
-        document.removeEventListener('mousemove', this._mouseMoveHandler);
-        this._mouseMoveHandler = null;
-      }
-      if (this._clickCaptureHandler) {
-        window.removeEventListener('click', this._clickCaptureHandler, true);
-        this._clickCaptureHandler = null;
-      }
-      if (this._altKeyHandler) {
-        window.removeEventListener('keydown', this._altKeyHandler, true);
-        window.removeEventListener('keyup', this._altKeyHandler, true);
-        this._altKeyHandler = null;
-      }
-      this._altPressed = false;
-
-      // Hide highlight box
-      if (this.highlighterEl) {
-        this.highlighterEl.classList.remove('pe-active');
-      }
-
-      // Restore cursor
-      if (document.body) {
-        document.body.style.removeProperty('cursor');
-      }
-      
-      this.highlightedElement = null;
-      this.selectedElement = null;
-
-      setTimeout(() => {
-        if (!this.active) {
-          this._removeClippy();
-        }
-      }, 700);
+      if (this.modes.isActive('erase')) this.modes.deactivate();
     }
 
     _ensureHighlighterElements() {
@@ -645,29 +681,6 @@
         }, 4000);
       } catch (err) {
         this._log('Error displaying toast:', err);
-      }
-    }
-
-    _handleMouseMove(e) {
-      const target = e.target;
-      if (!target || target === document.documentElement || target === document.body) return;
-
-      // Ignore hover on our own highlighter/tooltip elements
-      if (target.classList.contains('pe-highlighter') || 
-          target.classList.contains('pe-tooltip') || 
-          target.closest('.pe-highlighter') || 
-          target.id === 'pe-stylesheet') {
-        return;
-      }
-
-      this._altPressed = e.altKey;
-
-      if (this.highlightedElement !== target) {
-        this.highlightedElement = target;
-        this.selectedElement = target;
-        this._updateHighlight();
-      } else {
-        this._updateHighlight();
       }
     }
 
@@ -846,6 +859,10 @@
             element.style.setProperty('display', 'none', 'important');
             RetroAudio.playAction('erase');
           }
+        } else if (this._canSweep(element)) {
+          // No Clippy to feed: wipe the element away, left to right.
+          RetroAudio.playAction('erase');
+          this._sweepErase(element, selector);
         } else {
           element.style.setProperty('display', 'none', 'important');
           RetroAudio.playAction('erase');
@@ -888,12 +905,23 @@
         const key = `pe_selectors_${domain}`;
         const data = await storage.get(key);
         let selectors = data[key] || [];
-        
+
+        // Deleted from the Recycle Bin for good — Ctrl+Z must not resurrect it.
+        const existing = selectors.find(item => typeof item === 'object' && item && item.selector === selector);
+        if (existing && existing.permanent === true) return 'permanent';
+
         selectors = selectors.filter(item => {
           const sel = typeof item === 'string' ? item : item.selector;
           return sel !== selector;
         });
         await storage.set({ [key]: selectors });
+
+        // Restored mid-sweep: cancel the pending hide.
+        this._sweeping.delete(selector);
+        // Mask the elements first, then un-hide them in the same task, so the
+        // wipe plays in reverse instead of the element popping back.
+        this._beginRestoreSweeps([selector]);
+
         this._applySelectors(selectors);
         if (!silent) {
           RetroAudio.playAction('reset');
@@ -923,8 +951,10 @@
         } catch (e) {
           // ignore selector errors
         }
+        return true;
       } catch (err) {
         this._log('Error restoring element:', err);
+        return false;
       }
     }
 
@@ -941,6 +971,12 @@
         }
         
         await storage.remove(key);
+
+        this._sweeping.clear();
+        this._beginRestoreSweeps(
+          selectors.map(item => typeof item === 'string' ? item : (item && item.selector)).filter(Boolean)
+        );
+
         this._applySelectors([]);
         if (!silent) {
           RetroAudio.playAction('reset');
@@ -1019,10 +1055,17 @@
           if (this._undoStack && this._undoStack.length > 0) {
             e.preventDefault();
             const lastItem = this._undoStack.pop();
-            this._restoreSelector(lastItem.selector);
             const isTr = this.isTr;
-            const msg = isTr ? 'Geri Al: Element Eski Haline Getirildi' : 'Undo: Element Restored';
-            this._showToast(msg, 'success');
+            this._restoreSelector(lastItem.selector).then((restored) => {
+              if (restored === 'permanent') {
+                // Deleted from the Recycle Bin for good: nothing to undo.
+                const blocked = isTr ? 'Geri Al: Kalıcı olarak silindi' : 'Undo: Permanently deleted';
+                this._showToast(blocked, 'info');
+                return;
+              }
+              const msg = isTr ? 'Geri Al: Element Eski Haline Getirildi' : 'Undo: Element Restored';
+              this._showToast(msg, 'success');
+            });
           }
           return;
         }
@@ -1040,65 +1083,9 @@
           return;
         }
 
-        if (!this.active) return;
-
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          if (this.selectedElement && 
-              this.selectedElement.parentElement && 
-              this.selectedElement.parentElement !== document.body && 
-              this.selectedElement.parentElement !== document.documentElement) {
-            this.selectedElement = this.selectedElement.parentElement;
-            this._updateHighlight();
-          }
-        } else if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          if (this.selectedElement) {
-            // Tree traversal: first child → next sibling → parent's next sibling
-            let next = null;
-
-            // 1. Try first child
-            if (this.selectedElement.firstElementChild) {
-              next = this.selectedElement.firstElementChild;
-            }
-            // 2. Try next sibling
-            if (!next && this.selectedElement.nextElementSibling) {
-              next = this.selectedElement.nextElementSibling;
-            }
-            // 3. Bubble up to find an ancestor's next sibling
-            if (!next) {
-              let ancestor = this.selectedElement.parentElement;
-              while (ancestor && 
-                     ancestor !== document.body && 
-                     ancestor !== document.documentElement) {
-                if (ancestor.nextElementSibling) {
-                  next = ancestor.nextElementSibling;
-                  break;
-                }
-                ancestor = ancestor.parentElement;
-              }
-            }
-
-            if (next && 
-                next !== document.body && 
-                next !== document.documentElement) {
-              this.selectedElement = next;
-              this._updateHighlight();
-            }
-          }
-        } else if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          if (this.selectedElement && this.selectedElement.nextElementSibling) {
-            this.selectedElement = this.selectedElement.nextElementSibling;
-            this._updateHighlight();
-          }
-        } else if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          if (this.selectedElement && this.selectedElement.previousElementSibling) {
-            this.selectedElement = this.selectedElement.previousElementSibling;
-            this._updateHighlight();
-          }
-        }
+        // Whatever mode is running gets the remaining keys — the erase mode's
+        // arrow-key navigation lives in modes/erase.js.
+        this.modes.handleKey(e);
       });
     }
 
@@ -1222,7 +1209,13 @@
       }
     }
 
+    /* Paint is a mode like erase, so the manager keeps the two from running
+     * together. The drawing code itself is in _enterPaintMode. */
     _startPaintMode() {
+      this.modes.activate('paint');
+    }
+
+    _enterPaintMode() {
       if (document.getElementById('pe-paint-canvas')) return;
 
       const isTr = this.isTr;
@@ -1427,6 +1420,7 @@
         toolbox.remove();
         eraserCursor.remove();
         this._stopPaintFn = null;
+        this.modes.release('paint');
         RetroAudio.playSelection();
       };
       this._stopPaintFn = stopPaint;

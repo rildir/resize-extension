@@ -1048,6 +1048,22 @@ body.text-large .win-btn {
   padding: 6px 14px !important;
 }
 
+/* Large text: three buttons (Edit, Restore, delete-forever) no longer fit beside
+   the selector, which collapsed to nothing and pushed the buttons out of the
+   row. Let the buttons drop to their own line instead. */
+body.text-large .selector-item {
+  flex-wrap: wrap;
+}
+
+body.text-large .selector-text {
+  flex: 1 1 60px;
+  min-width: 60px;
+}
+
+body.text-large .selector-item .win-btn-sm {
+  padding: 3px 8px !important;
+}
+
 body.text-large .field-label,
 body.text-large .list-title,
 body.text-large .filter-label,
@@ -1296,46 +1312,18 @@ body.text-large .tour-tooltip-body {
   margin-bottom: 2px;
 }
 
-/* Recycle Bin drawn in pure CSS */
-.recycle-bin-icon::before {
-  content: "";
-  position: absolute;
-  top: 5px;
-  left: 4px;
-  width: 14px;
-  height: 14px;
-  border: 2px solid #808080;
-  border-top: none;
-  background: #c0c0c0;
-  border-radius: 0 0 2px 2px;
+/* The bin is an inline SVG in popup.html. "empty" and "full" differ only in
+ * whether the sheets of paper sticking out of the top are shown. */
+.recycle-bin-icon svg {
+  display: block;
 }
 
-.recycle-bin-icon::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 3px;
-  background: #808080;
-  border-radius: 1px;
+.recycle-bin-icon .bin-paper {
+  display: none;
 }
 
-.recycle-bin-icon.empty::before {
-  /* Normal grey border */
-}
-
-/* Full state: pieces of paper popping out */
-.recycle-bin-icon.full::after {
-  transform: rotate(-15deg);
-  top: 0px;
-}
-
-.recycle-bin-icon.full::before {
-  border-color: #000080;
-  background-image: linear-gradient(45deg, #000080 25%, transparent 25%), 
-                    linear-gradient(-45deg, #000080 25%, transparent 25%);
-  background-size: 4px 4px;
+.recycle-bin-icon.full .bin-paper {
+  display: inline;
 }
 
 .recycle-bin-label {

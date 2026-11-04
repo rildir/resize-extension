@@ -22,6 +22,8 @@ $files = @(
     'content.js',
     'content.css',
     'shared.js',
+    'modes/index.js',
+    'modes/erase.js',
     'locales.js',
     'popup.html',
     'popup.css',
@@ -93,7 +95,11 @@ if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
 New-Item -ItemType Directory -Path $pkg -Force | Out-Null
 
 foreach ($f in $files) {
-    Copy-Item (Join-Path $root $f) -Destination $pkg
+    # Keep the relative path: content scripts load modes/index.js, not index.js.
+    $dest = Join-Path $pkg $f
+    $destDir = Split-Path -Parent $dest
+    if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+    Copy-Item (Join-Path $root $f) -Destination $dest
 }
 foreach ($d in $folders) {
     Copy-Item (Join-Path $root $d) -Destination $pkg -Recurse

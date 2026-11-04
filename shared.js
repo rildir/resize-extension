@@ -109,10 +109,14 @@ function PE_isSafeSelector(sel) {
  * Rules are stored either as a bare selector string (legacy) or as
  * { selector, action }. Normalise to the object form and drop anything
  * malformed or unsafe.
+ *
+ * A rule may also carry `permanent: true`: the user deleted it from the
+ * Recycle Bin for good. It keeps hiding the element, but is no longer listed
+ * for restoring and Ctrl+Z skips it. Restore All Layout still clears it.
  */
 function PE_normalizeRules(list) {
   if (!Array.isArray(list)) return [];
-  const seen = new Set();
+  const seen = new Map();
   const out = [];
   for (const item of list) {
     const isString = typeof item === 'string';
@@ -122,10 +126,15 @@ function PE_normalizeRules(list) {
     const action = (!isString && item && item.action === 'stretch') ? 'stretch' : 'hide';
     if (!PE_isSafeSelector(selector)) continue;
     const trimmed = selector.trim();
+    const permanent = !isString && item && item.permanent === true;
     const dedupeKey = `${action}::${trimmed}`;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-    out.push({ selector: trimmed, action });
+    if (seen.has(dedupeKey)) {
+      // The same rule twice: if either copy was deleted for good, it stays so.
+      if (permanent) out[seen.get(dedupeKey)].permanent = true;
+      continue;
+    }
+    seen.set(dedupeKey, out.length);
+    out.push(permanent ? { selector: trimmed, action, permanent: true } : { selector: trimmed, action });
   }
   return out;
 }
