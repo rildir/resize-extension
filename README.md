@@ -12,7 +12,7 @@
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-1.8.0-FF4757?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-1.9.0-FF4757?style=for-the-badge)]()
 
 *A Chrome/Edge extension wrapped in a nostalgic Windows 95 aesthetic — because cleaning up the web should be fun.*
 
@@ -111,6 +111,14 @@ One click shows how a page is built, drawn on a single overlay that lets clicks 
 - **Capture** saves the visible tab, overlay included, as a PNG (nothing leaves your computer)
 - Start it from the toolbar button or `Alt+Shift+X`; `Esc` or the close button removes it without a trace
 
+### 🧬 Extract to Code
+Pick an element the way the eraser does, but take it with you instead of erasing it:
+- **HTML** — cleaned up: scripts, iframes, `data-*`, inline handlers and unused ids are gone, links are made absolute, class names are kept
+- **CSS** — only the computed properties that differ from the *browser's* defaults (measured in a blank document, so a site's own resets are not mistaken for defaults), folded into shorthands, with `::before`/`::after`, one `.pe-N` class per element
+- **Tokens** — the fonts the element uses with their `@font-face` file URLs (listed, never downloaded) and its colours as a ready-to-paste `--pe-color-N` block
+- Three tabs with **Copy**, plus **Copy as single HTML file**; subtrees over 500 elements are cut with a warning
+- Start it from the toolbar button or `Alt+Shift+C`; `Esc` closes it without a trace
+
 ### 📎 Clippy Assistant
 - **Contextual Tips** — Clippy reacts when you hover UI elements
 - **Random Tips** — Click Clippy for useful PageEraser tips
@@ -203,6 +211,7 @@ Right-click any element on a page to access:
 | `Ctrl+Shift+Y` | Restore All Layout |
 | `Ctrl+Shift+K` | Start Paintbrush 95 |
 | `Alt+Shift+X` | Toggle Layout X-Ray (`Ctrl+Shift+X` also works while the page has focus) |
+| `Alt+Shift+C` | Toggle Extract to Code (works while the page has focus; for a browser-wide key assign one at `chrome://extensions/shortcuts` — Chrome allows only four default shortcuts per extension and they are taken) |
 | `Ctrl+Z` | Undo last erased element (on page) |
 
 ### In Selection Mode

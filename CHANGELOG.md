@@ -4,6 +4,96 @@ All notable changes to PageEraser are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] — 2026-11-04
+
+### Added
+
+- **Extract to Code** (`modes/extract.js`, `modes/extract-core.js`). Click an
+  element — with the eraser's hover highlight and ↑/↓ parent/child walk — to
+  open a window with three tabs:
+  - **HTML**: the element and its subtree, cleaned up. Removed: `script`,
+    `iframe`, `style`, `link`, `noscript`, `object`, `embed`, `template`,
+    `data-*`, inline event handlers (`on*`), `style` attributes (the CSS tab
+    replaces them), `nonce`/`integrity`, and every `id` nothing inside the
+    extract refers to (`label for`, `aria-*`, `#anchor` links, SVG `url(#…)`
+    keep theirs). Class names are kept, links and image sources are made
+    absolute, an `<img>` uses its resolved `currentSrc`. Indentation goes only
+    between block-level children, so the markup renders the way it did.
+  - **CSS**: for each element only the computed properties that differ from the
+    browser's defaults for that tag, measured on an empty element in a
+    throwaway blank iframe (so a site's CSS resets are not counted as defaults).
+    An inherited property is written only where it differs from the parent.
+    Four-sided properties fold into `margin`, `padding`, `border`,
+    `border-radius`, `gap`, `flex` and `overflow`. `::before`/`::after` are
+    included. Each element that needs styles gets a `.pe-N` class next to its
+    own classes.
+  - **Tokens**: the fonts used (each stack, and the `@font-face` file URLs found —
+    listed, never downloaded) and the colours as a `:root { --pe-color-N }` block.
+  - **Copy** on every tab, and **Copy as single HTML file** (HTML + `<style>`).
+  - Syntax colouring is a small built-in tokenizer; page text reaches the
+    window only through `textContent`, never `innerHTML`. A subtree of more than
+    500 elements is cut to the first 500 with a warning.
+- `Alt+Shift+C` command (to be assigned at `chrome://extensions/shortcuts`), in-page fallback (`Alt+Shift+C` only — `Ctrl+Shift+C`
+  belongs to the browser's inspector), toolbar button and *Actions* menu entry.
+- Nothing is added to the manifest: no permission, no host access.
+
+### Changed
+
+- The element picker's tooltip and highlight take their wording and colour from
+  the active picker (violet for Extract), the eraser's are unchanged.
+
+### Fixed
+
+- **The extension did not load at all.** The fifth command carried a
+  `suggested_key`, and Chrome refuses a manifest with more than four ('Too many
+  shortcuts specified for commands: the maximum is 4'). `toggle-extract` no longer
+  suggests a key; assign one at `chrome://extensions/shortcuts`. The in-page
+  `Alt+Shift+C` works regardless.
+- **The picker's own crosshair ended up in the extracted CSS** (`cursor: crosshair`,
+  inherited by every element), and `<body style="">` was left behind when the mode
+  ended. The cursor is lifted while the styles are read and the empty attribute is
+  removed.
+- **Links lost their look.** The browser-default reference for `<a>` was measured
+  without an `href`, so `text-decoration: none` and the link colour never made it
+  out, and a value equal to the parent's was skipped even where the browser has a
+  rule of its own for that tag (the link colour) that would win again elsewhere.
+  The reference link now has an `href`, and such values are written.
+- **Icons, spacers, buttons and flex/grid items collapsed.** Descendant `width` /
+  `height` are still left out, except for boxes with nothing inside, buttons,
+  shrink-wrapped `inline-*` boxes and flex/grid items, whose size cannot be
+  recovered from the parent. A product card, a navbar and a form now render
+  pixel-identical (0 %, 0.06 %, 0 % of pixels differ) in a blank page.
+- Noise left out of the CSS: the logical twins of `border-*-radius`, and
+  `row-rule-color` / `-webkit-text-stroke-color` where there is no rule or stroke.
+- Copying on a page whose `Permissions-Policy` forbids `clipboard-write` logged a
+  policy violation in the page console before falling back; the policy is now
+  asked first.
+
+### Known limitations
+
+- The `width` and `height` of most descendants are not written (they are the
+  current layout, not a design value); the root, images and other replaced
+  elements, buttons, positioned, floated and shrink-wrapped boxes, empty boxes and
+  flex/grid items keep theirs. The root's margins are not written either: they
+  belong to the page it was on, and `margin: auto` is written as the pixels it
+  resolved to, so a centred block no longer re-centres in a different width.
+- Animations (`@keyframes`) and media queries are not exported: the result is
+  the element as it looks at the current window size.
+- Pseudo-elements other than `::before`/`::after`, shadow DOM contents and
+  `<canvas>`/`<video>` frames are not extracted.
+- Cross-origin style sheets (Google Fonts, CDNs) do not let an extension read
+  their `@font-face` rules, and Chrome does not list the font files such a style
+  sheet pulls in (they are absent from Resource Timing). The Tokens tab then says
+  so and shows the families and load state from `document.fonts`, without URLs.
+- The *Extract to Code* command has no default key (Chrome allows four suggested
+  keys per extension and they are taken); assign one at
+  `chrome://extensions/shortcuts`. The in-page `Alt+Shift+C` works regardless.
+- The computed styles are read while the pointer is over the element, so a
+  `:hover` rule that applies to it at that moment (an underlined headline in a
+  card, say) is captured too.
+- The ids and `aria-hidden`: ids are kept only when referenced, `aria-*`
+  attributes (including `aria-hidden`) are kept as they are.
+
 ## [1.8.0] — 2026-11-04
 
 ### Added

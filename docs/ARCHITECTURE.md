@@ -87,6 +87,19 @@ which the browser only grants after the user has invoked the extension on that
 tab) and the PNG is saved from the page via a blob link, so the `downloads`
 permission is not needed.
 
+`modes/extract.js` (Extract to Code) is the third. Like the element picker it
+selects an element on hover, and it reuses the eraser's pointer and arrow-key
+handling directly (`PE_createEraseMode(host)`) rather than copying it, so the
+two cannot drift apart; only the click does something different. The logic that
+needs no browser lives in `modes/extract-core.js`: which computed properties to
+write, folding them into shorthands, HTML cleaning and printing, colour and font
+parsing, and the syntax tokenizers. The engine in `extract.js` feeds it real
+computed styles. Defaults are read from an empty element of the same tag in a
+throwaway `about:blank` iframe — measuring them on the page itself would count
+the site's own resets (`* { margin: 0 }`) as browser defaults — and the iframe is
+removed as soon as one extraction is done. The result window is built once; code
+goes into it as `textContent` and `<span>`s, never as HTML.
+
 The eraser wipe is not a mode: it is a CSS `mask-image` animation
 (`.pe-erasing` / `.pe-restoring` in `content.css`) that `content.js` adds to the
 element for 350 ms. While it plays, the element's stylesheet rule is held back
@@ -293,7 +306,7 @@ additional permissions, so it is tracked separately.
 
 ## 8. Testing
 
-`node tests/run.js` — no browser, no dependencies, 122 checks:
+`node tests/run.js` — no browser, no dependencies, 178 checks:
 
 - **Unit tests** for `shared.js`: selector validation (including the
   `CSS.escape` case and each injection vector), domain scoping (with a
@@ -312,6 +325,15 @@ additional permissions, so it is tracked separately.
     every one of them is in the shipping list;
   - the wipe length in `content.js` equals the one in `content.css`, sits in the
     300–400 ms range, and honours `prefers-reduced-motion`.
+- **Unit tests** for Extract to Code's pure logic, against plain test doubles for
+  DOM nodes: diffing against defaults and the parent (inherited vs. not, the
+  currentcolor-dependent properties), shorthand folding (including a border the
+  browser would draw and an elliptical corner), element collection and the
+  500-element cut, attribute cleaning, id references, printing that must not
+  change rendering (inline whitespace, `<pre>`, SVG), colours, font stacks and
+  `@font-face` sources, and the tokenizers (lossless on well-formed and broken
+  input), plus static guards (no network, a single `innerHTML`, no writes to the
+  page's elements).
 - **Unit tests** for the Layout X-Ray helpers: display-type colour family, px and
   grid-track parsing, grid/flex/wrapped-flex gap lines (including reverse
   directions and spacing that is *not* the declared gap), label text, and static
@@ -326,7 +348,7 @@ additional permissions, so it is tracked separately.
 same on every push and uploads the packaged ZIP as an artifact.
 
 What is **not** covered: anything requiring a real browser — actual injection
-timing, the wipe animation itself, the X-Ray overlay's rendering and Capture, paint mode, cross-browser rendering. Those are manual. A Puppeteer
+timing, the wipe animation itself, the X-Ray overlay's rendering and Capture, how faithfully an extract renders on its own, paint mode, cross-browser rendering. Those are manual. A Puppeteer
 harness loading the unpacked extension is the obvious next step.
 
 ---
