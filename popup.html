@@ -79,6 +79,10 @@
               <span data-i18n="xrayBtn">Layout X-Ray</span>
               <span class="menu-shortcut">Alt+Shift+X</span>
             </div>
+            <div class="dropdown-item" id="menu-item-extract">
+              <span data-i18n="extractBtn">Extract to Code</span>
+              <span class="menu-shortcut">Alt+Shift+C</span>
+            </div>
           </div>
         </div>
         <div class="menu-item-container">
@@ -202,15 +206,23 @@
           </div>
         </div>
 
-        <!-- Layout X-Ray -->
-        <div style="width: 100%; margin-top: 4px">
+        <!-- Layout X-Ray and Extract to Code -->
+        <div style="display: flex; gap: 4px; width: 100%; margin-top: 4px">
           <button
             class="win-btn"
             id="btn-xray"
             type="button"
-            style="width: 100%"
+            style="flex: 1"
           >
             <span data-i18n="xrayBtn">Layout X-Ray</span>
+          </button>
+          <button
+            class="win-btn"
+            id="btn-extract"
+            type="button"
+            style="flex: 1"
+          >
+            <span data-i18n="extractBtn">Extract to Code</span>
           </button>
         </div>
 
@@ -345,6 +357,12 @@
             <span class="key-label">Alt+Shift+X</span>
             <span class="key-desc" data-i18n="toggleXray"
               >Toggle Layout X-Ray</span
+            >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Alt+Shift+C</span>
+            <span class="key-desc" data-i18n="toggleExtract"
+              >Toggle Extract to Code</span
             >
           </div>
         </fieldset>

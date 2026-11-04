@@ -737,3 +737,100 @@
   color: #000000 !important;
   word-break: break-word !important;
 }
+
+/* ─── Extract to Code ───────────────────────────────────────
+ * The picker's highlight is violet so it reads as a different tool from the
+ * eraser; the result window reuses the Paintbrush 95 window chrome.
+ */
+.pe-highlighter.pe-extract-mode {
+  border-color: #6c5ce7 !important;
+  outline-color: #ffffff !important;
+  background-color: rgba(108, 92, 231, 0.08) !important;
+}
+
+.pe-highlighter.pe-extract-mode .pe-tooltip {
+  border-color: rgba(108, 92, 231, 0.5) !important;
+}
+
+.pe-highlighter.pe-extract-mode .pe-tooltip-tag {
+  color: #a29bfe !important;
+}
+
+.pe-extract-panel {
+  width: 560px !important;
+  max-width: calc(100vw - 16px) !important;
+  top: 16px !important;
+  direction: ltr !important;
+  z-index: 2147483647 !important;
+}
+
+.pe-extract-tabs {
+  display: flex !important;
+  gap: 2px !important;
+  margin-bottom: -4px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.pe-extract-tab {
+  padding: 3px 12px !important;
+  background: #c0c0c0 !important;
+  color: #000000 !important;
+  font: 11px "MS Sans Serif", Tahoma, Arial, sans-serif !important;
+  border-top: 1px solid #ffffff !important;
+  border-left: 1px solid #ffffff !important;
+  border-right: 1px solid #808080 !important;
+  border-bottom: 0 !important;
+  box-shadow: 1px 0 0 #000000 !important;
+  cursor: pointer !important;
+  outline: none !important;
+}
+
+.pe-extract-tab.pe-active {
+  font-weight: bold !important;
+  padding-top: 5px !important;
+  margin-top: -2px !important;
+}
+
+.pe-extract-code {
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 6px !important;
+  min-height: 140px !important;
+  max-height: min(46vh, 380px) !important;
+  overflow: auto !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-top: 2px solid #808080 !important;
+  border-left: 2px solid #808080 !important;
+  border-right: 2px solid #ffffff !important;
+  border-bottom: 2px solid #ffffff !important;
+  box-shadow: inset 1px 1px 0 #000000 !important;
+  font: 11px/1.45 "Lucida Console", Consolas, monospace !important;
+  white-space: pre !important;
+  tab-size: 2 !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  text-align: left !important;
+}
+
+.pe-extract-status {
+  min-height: 12px !important;
+  font-size: 10px !important;
+  color: #000000 !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
+
+.pe-tok-tag { color: #000080 !important; }
+.pe-tok-attr { color: #800000 !important; }
+.pe-tok-string { color: #006400 !important; }
+.pe-tok-punct { color: #707070 !important; }
+.pe-tok-comment { color: #808080 !important; font-style: italic !important; }
+.pe-tok-selector { color: #000080 !important; font-weight: bold !important; }
+.pe-tok-prop { color: #800000 !important; }
+.pe-tok-var { color: #800080 !important; }
+.pe-tok-color { color: #007070 !important; }
+.pe-tok-number { color: #0000cd !important; }
+.pe-tok-func { color: #800080 !important; }
+.pe-tok-keyword { color: #000000 !important; }

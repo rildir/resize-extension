@@ -255,6 +255,7 @@
         }
       });
       this.modes.register('xray', PE_createXrayMode(this));
+      this.modes.register('extract', PE_createExtractMode(this));
 
       // Selectors whose erase sweep is still playing. Their stylesheet rule is
       // held back until the wipe finishes, otherwise the rule would hide the
@@ -579,8 +580,8 @@
         if (this.active) this._stopSelectionMode();
       } catch (err) { /* best effort */ }
       try {
-        // X-Ray's exit() only removes its own nodes; it needs no chrome.* call.
-        if (this.modes.isActive('xray')) this.modes.deactivate();
+        // X-Ray's and Extract's exit() only remove their own nodes; no chrome.* call.
+        if (this.modes.isActive('xray') || this.modes.isActive('extract')) this.modes.deactivate();
       } catch (err) { /* best effort */ }
 
       // Note: #pe-stylesheet is deliberately left in place. The user asked for
@@ -735,8 +736,10 @@
       this.highlighterEl.style.height = rect.height + 'px';
       this.highlighterEl.classList.add('pe-active');
 
-      // Update color theme based on Alt key
-      this.highlighterEl.classList.toggle('pe-stretch-mode', this._altPressed);
+      // Update color theme based on Alt key (the extract picker has its own colour)
+      const extracting = this._pickerAction === 'extract';
+      this.highlighterEl.classList.toggle('pe-extract-mode', extracting);
+      this.highlighterEl.classList.toggle('pe-stretch-mode', !extracting && this._altPressed);
 
       // Update tooltip text and position (prevent overlay overflow at viewport top)
       if (rect.top < 40) {
@@ -756,7 +759,11 @@
       const tag = escapeHtml(this.selectedElement.tagName.toLowerCase());
 
       const isTr = this.isTr;
-      const actionText = this._altPressed
+      const actionText = extracting
+        ? (isTr
+            ? `<span style="color:#a29bfe;font-weight:700;"><kbd>Tıkla</kbd> Koda Çıkar</span>`
+            : `<span style="color:#a29bfe;font-weight:700;"><kbd>Click</kbd> Extract to Code</span>`)
+        : this._altPressed
         ? (isTr
             ? `<span style="color:#00d2d3;font-weight:700;"><kbd>Tıkla</kbd> Genişliğe Sığdır</span>`
             : `<span style="color:#00d2d3;font-weight:700;"><kbd>Click</kbd> Stretch to Full Width</span>`)
@@ -1090,6 +1097,11 @@
             e.preventDefault();
             this.modes.toggle('xray');
             return;
+          } else if (keyUpper === 'C' && e.altKey) {
+            // Alt only: Ctrl+Shift+C is the browser's own "inspect element".
+            e.preventDefault();
+            this.modes.toggle('extract');
+            return;
           }
         }
 
@@ -1120,7 +1132,7 @@
             this._stopPaintFn();
             return;
           }
-          if (this.modes.isActive('xray')) {
+          if (this.modes.isActive('xray') || this.modes.isActive('extract')) {
             this.modes.deactivate();
             return;
           }
@@ -1162,7 +1174,7 @@
               sendResponse({ success: true });
               break;
             case 'GET_STATUS':
-              sendResponse({ active: this.active, xray: this.modes.isActive('xray') });
+              sendResponse({ active: this.active, xray: this.modes.isActive('xray'), extract: this.modes.isActive('extract') });
               break;
             case 'RESTORE_SELECTOR':
               this._restoreSelector(msg.selector, msg.silent).then(() => {
@@ -1212,6 +1224,12 @@
             case 'START_PAINT':
               this._startPaintMode();
               sendResponse({ success: true });
+              break;
+            case 'TOGGLE_EXTRACT':
+              if (this.modes.toggle('extract') && !msg.silent) {
+                this._showToast(this.isTr ? 'PageEraser: Koda Çıkar Aktif' : 'PageEraser: Extract to Code Active', 'info');
+              }
+              sendResponse({ success: true, active: this.modes.isActive('extract') });
               break;
             case 'TOGGLE_XRAY':
               this.modes.toggle('xray');

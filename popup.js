@@ -15,6 +15,7 @@
   /* ─── DOM References ─────────────────────────────────────── */
   const btnSelect     = document.getElementById('btn-select');
   const btnXray       = document.getElementById('btn-xray');
+  const btnExtract    = document.getElementById('btn-extract');
   const btnReset      = document.getElementById('btn-reset');
   const domainNameEl  = document.getElementById('domain-name');
   const hiddenCountEl = document.getElementById('hidden-count');
@@ -156,12 +157,14 @@
         domainNameEl.textContent = currentDomain;
         btnSelect.disabled = false;
         btnXray.disabled = false;
+        btnExtract.disabled = false;
         await refreshSelectorsList();
       } else {
         currentDomain = '';
         domainNameEl.textContent = LOCALES[currentLang].cannotRun;
         btnSelect.disabled = true;
         btnXray.disabled = true;
+        btnExtract.disabled = true;
         btnReset.disabled = true;
         selectorsList.innerHTML = `<div class="empty-state">${LOCALES[currentLang].noElements}</div>`;
         hiddenCountEl.textContent = '0';
@@ -1090,6 +1093,15 @@
   }
   btnXray.addEventListener('click', toggleXray);
   document.getElementById('menu-item-xray').addEventListener('click', toggleXray);
+
+  // ─── Extract to Code ───────────────────────────────────────
+  async function toggleExtract() {
+    RetroAudio.playSelection();
+    await sendMessageToTab({ type: 'TOGGLE_EXTRACT' });
+    window.close();
+  }
+  btnExtract.addEventListener('click', toggleExtract);
+  document.getElementById('menu-item-extract').addEventListener('click', toggleExtract);
 
   // ─── Paint Webpage Actions Menu Trigger ────────────────────
   const paintBtn = document.getElementById('menu-item-paint');

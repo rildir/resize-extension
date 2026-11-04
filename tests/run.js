@@ -332,7 +332,7 @@ function freshPage() {
 console.log('content scripts — load order, shipping, animation timing');
 const csJs = manifest.content_scripts[0].js;
 check('content scripts load shared.js, then the modes, then content.js',
-  csJs, ['shared.js', 'modes/index.js', 'modes/erase.js', 'modes/xray.js', 'content.js']);
+  csJs, ['shared.js', 'modes/index.js', 'modes/erase.js', 'modes/xray.js', 'modes/extract-core.js', 'modes/extract.js', 'content.js']);
 
 const shippedAll = [...buildScript.matchAll(/^\s*'([^']+)',?\s*$/gm)].map((m) => m[1]);
 check('every manifest content script is listed in build.ps1', csJs.filter((f) => !shippedAll.includes(f)), []);
@@ -459,6 +459,346 @@ check('xray: near zone covers the viewport and one viewport of scroll in every d
 ], [true, true, false, true, false, false]);
 const xraySrc = read('modes/xray.js');
 check('xray: toolbar is anchored by left (draggable on RTL pages)', /toolbar\.style\.setProperty\('right', 'auto', 'important'\)/.test(xraySrc), true);
+
+/* ─── 9. Extract to Code ─────────────────────────────────── */
+console.log('modes/extract-core.js — pure helpers');
+const E = require(path.join(ROOT, 'modes/extract-core.js'));
+
+// Test doubles for DOM nodes: just the properties the helpers read.
+function fakeEl(tag, attrs, children, ns) {
+  const kids = children || [];
+  const node = {
+    nodeType: 1,
+    localName: tag,
+    namespaceURI: ns,
+    attributes: Object.entries(attrs || {}).map(([name, value]) => ({ name, value })),
+    childNodes: kids,
+    children: kids.filter((k) => k.nodeType === 1),
+    parentElement: null
+  };
+  kids.forEach((k) => { if (k.nodeType === 1) k.parentElement = node; });
+  return node;
+}
+const fakeText = (data) => ({ nodeType: 3, data });
+const mapGetter = (obj) => (name) => obj[name];
+
+// escaping
+check('escapeText escapes & < > and non-breaking spaces',
+  E.PE_extractEscapeText('a & b <i> ' + String.fromCharCode(160)), 'a &amp; b &lt;i&gt; &nbsp;');
+check('escapeAttr escapes & and quotes', E.PE_extractEscapeAttr('say "hi" & go'), 'say &quot;hi&quot; &amp; go');
+
+// which properties count
+check('isInherited: text and font properties inherit, box properties do not',
+  ['color', 'font-size', 'font-variant-caps', 'line-height', 'list-style-type', 'visibility', 'margin-top', 'display', 'text-decoration-line', 'background-color']
+    .map(E.PE_extractIsInherited),
+  [true, true, true, true, true, true, false, false, false, false]);
+check('skipProp: vendor, animation, logical and size-dependent geometry are skipped',
+  ['-webkit-font-smoothing', 'animation-name', 'margin-inline-start', 'inline-size', 'border-block-end-color', 'transform-origin', 'd', 'cx',
+   '-webkit-line-clamp', 'margin-top', 'transition-duration', 'overflow-x', 'padding-left']
+    .map(E.PE_extractSkipProp),
+  [true, true, true, true, true, true, true, true, false, false, false, false, false]);
+
+// diffing against the browser default and the parent
+(function diffTests() {
+  const names = ['color', 'font-weight', 'display', 'margin-top', 'width', 'height', 'border-top-color', 'border-top-style',
+    'outline-color', 'outline-style', 'animation-name', 'margin-inline-start', '-webkit-font-smoothing'];
+  const base = {
+    color: 'rgb(51, 51, 51)', 'font-weight': '400', display: 'flex', 'margin-top': '8px', width: '300px', height: '40px',
+    'border-top-color': 'rgb(51, 51, 51)', 'border-top-style': 'none', 'outline-color': 'rgb(51, 51, 51)', 'outline-style': 'none',
+    'animation-name': 'spin', 'margin-inline-start': '4px', '-webkit-font-smoothing': 'auto'
+  };
+  const ref = { color: 'rgb(0, 0, 0)', 'font-weight': '400', display: 'block', 'margin-top': '0px', 'border-top-color': 'rgb(0, 0, 0)', 'border-top-style': 'none', 'outline-color': 'rgb(0, 0, 0)', 'outline-style': 'none' };
+  const parentSame = { color: 'rgb(51, 51, 51)', 'font-weight': '400' };
+  const names2 = (r) => r.map((d) => d[0]);
+
+  check('child: inherits colour from its parent (not repeated), writes box properties that differ, drops width/height and noise',
+    names2(E.PE_extractDiffStyles(names, mapGetter(base), mapGetter(ref), mapGetter(parentSame), { isRoot: false, keepSize: false })),
+    ['display', 'margin-top']);
+  check('child: a reset to the default is written when the parent differs',
+    names2(E.PE_extractDiffStyles(['font-weight'], mapGetter({ 'font-weight': '400' }), mapGetter({ 'font-weight': '400' }), mapGetter({ 'font-weight': '700' }), { isRoot: false })),
+    ['font-weight']);
+  check('root: inherited properties are compared with the default, margins are dropped, size is kept on request',
+    names2(E.PE_extractDiffStyles(names, mapGetter(base), mapGetter(ref), null, { isRoot: true, keepSize: true })),
+    ['color', 'display', 'width', 'height']);
+  check('colours that merely follow currentcolor are skipped until the border/outline is on',
+    names2(E.PE_extractDiffStyles(['border-top-color', 'border-top-style'],
+      mapGetter({ 'border-top-color': 'rgb(9, 9, 9)', 'border-top-style': 'solid' }), mapGetter({ 'border-top-color': 'rgb(0, 0, 0)', 'border-top-style': 'none' }), null, { isRoot: true })),
+    ['border-top-color', 'border-top-style']);
+})();
+
+// shorthands
+(function condenseTests() {
+  const get = mapGetter({
+    'margin-top': '8px', 'margin-right': '0px', 'margin-bottom': '8px', 'margin-left': '0px',
+    'padding-top': '4px', 'padding-right': '4px', 'padding-bottom': '4px', 'padding-left': '4px',
+    'border-top-style': 'solid', 'border-top-width': '1px', 'border-top-color': 'rgb(1, 2, 3)',
+    'border-right-style': 'solid', 'border-right-width': '1px', 'border-right-color': 'rgb(1, 2, 3)',
+    'border-bottom-style': 'solid', 'border-bottom-width': '1px', 'border-bottom-color': 'rgb(1, 2, 3)',
+    'border-left-style': 'solid', 'border-left-width': '1px', 'border-left-color': 'rgb(1, 2, 3)',
+    'border-top-left-radius': '6px', 'border-top-right-radius': '6px', 'border-bottom-right-radius': '6px', 'border-bottom-left-radius': '6px',
+    'row-gap': '8px', 'column-gap': '16px', 'flex-grow': '1', 'flex-shrink': '0', 'flex-basis': '0%',
+    'overflow-x': 'hidden', 'overflow-y': 'auto', color: 'rgb(1, 2, 3)'
+  });
+  const none = () => 'none';
+  const decl = (...n) => n.map((x) => [x, get(x)]);
+
+  check('margin and padding fold to 1-4 value shorthands',
+    E.PE_extractCondense(decl('margin-top', 'padding-left', 'color'), get, none),
+    [['margin', '8px 0px'], ['padding', '4px'], ['color', 'rgb(1, 2, 3)']]);
+  check('border: four equal sides become one declaration',
+    E.PE_extractCondense(decl('border-top-width'), get, none), [['border', '1px solid rgb(1, 2, 3)']]);
+  check('border: a side that is off is left out when the default is off too',
+    E.PE_extractCondense([['border-bottom-width', '1px']], mapGetter({
+      'border-top-style': 'none', 'border-right-style': 'none', 'border-left-style': 'none',
+      'border-bottom-style': 'solid', 'border-bottom-width': '1px', 'border-bottom-color': 'rgb(9, 9, 9)'
+    }), () => 'none'), [['border-bottom', '1px solid rgb(9, 9, 9)']]);
+  check('border: switching off a border the browser would draw (fieldset) is written',
+    E.PE_extractCondense([['border-top-width', '0px']], mapGetter({
+      'border-top-style': 'none', 'border-right-style': 'none', 'border-bottom-style': 'none', 'border-left-style': 'none'
+    }), () => 'groove'), [['border', 'none']]);
+  check('border-radius folds, an elliptical corner stays as longhands',
+    [E.PE_extractCondense(decl('border-top-left-radius'), get, none),
+     E.PE_extractCondense([['border-top-left-radius', '8px 4px']], mapGetter({
+       'border-top-left-radius': '8px 4px', 'border-top-right-radius': '0px', 'border-bottom-right-radius': '0px', 'border-bottom-left-radius': '0px'
+     }), none)],
+    [[['border-radius', '6px']], [['border-top-left-radius', '8px 4px']]]);
+  check('gap, flex and overflow fold',
+    E.PE_extractCondense(decl('row-gap', 'flex-grow', 'overflow-x'), get, none),
+    [['gap', '8px 16px'], ['flex', '1 0 0%'], ['overflow', 'hidden auto']]);
+})();
+
+check('buildCss writes one rule per element and skips empty ones',
+  E.PE_extractBuildCss([
+    { selector: '.pe-1', decls: [['display', 'flex'], ['gap', '8px']] },
+    { selector: '.pe-2', decls: [] },
+    { selector: '.pe-3::before', decls: [['content', '"x"']] }
+  ]),
+  '.pe-1 {\n  display: flex;\n  gap: 8px;\n}\n\n.pe-3::before {\n  content: "x";\n}');
+
+// which elements, which attributes
+(function htmlTests() {
+  const img = fakeEl('img', { src: 'a.png', srcset: 'a.png 1x, b.png 2x', 'data-lazy': '1', onerror: 'x()' });
+  const picture = fakeEl('picture', {}, [fakeEl('source', { srcset: 'a.webp' }), img]);
+  const tree = fakeEl('div', { id: 'root', class: 'card' }, [
+    fakeEl('script', {}, [fakeText('alert(1)')]),
+    fakeEl('style', {}, [fakeText('.a{}')]),
+    fakeEl('iframe', { src: 'https://x.test' }),
+    fakeEl('p', {}, [fakeText('one')]),
+    picture,
+    fakeEl('p', {}, [fakeText('two')])
+  ]);
+
+  const all = E.PE_extractCollect(tree, 500);
+  check('collect: script/style/iframe and <picture><source> are dropped, document order kept',
+    all.list.map((n) => n.localName), ['div', 'p', 'picture', 'img', 'p']);
+  check('collect: total counts everything kept', [all.total, all.truncated], [5, false]);
+  const cut = E.PE_extractCollect(tree, 3);
+  check('collect: a cap keeps a prefix of document order and reports the truncation',
+    [cut.list.map((n) => n.localName), cut.total, cut.truncated], [['div', 'p', 'picture'], 5, true]);
+  const svgNs = E.PE_EXTRACT_SVG_NS;
+  check('collect: an SVG <title> is content, an SVG <script> is not',
+    E.PE_extractCollect(fakeEl('svg', {}, [fakeEl('title', {}, [], svgNs), fakeEl('script', {}, [], svgNs), fakeEl('path', {}, [], svgNs)], svgNs), 500)
+      .list.map((n) => n.localName), ['svg', 'title', 'path']);
+
+  const refs = E.PE_extractReferencedIds([
+    fakeEl('label', { for: 'email' }),
+    fakeEl('input', { 'aria-describedby': 'hint err' }),
+    fakeEl('a', { href: '#top%20x' }),
+    fakeEl('rect', { fill: 'url(#grad)', 'clip-path': "url('#clip')" }),
+    fakeEl('a', { href: 'https://x.test/#nope' })
+  ]);
+  check('referencedIds: label for, aria-*, in-page links and SVG url(#…)',
+    Array.from(refs).sort(), ['clip', 'email', 'err', 'grad', 'hint', 'top x']);
+
+  const attrs = E.PE_extractAttributes(
+    fakeEl('div', { 'data-x': '1', onclick: 'go()', style: 'color:red', nonce: 'abc', id: 'gone', class: 'a b', title: 'hi', 'aria-hidden': 'true' }),
+    { keepIds: new Set(['kept']), classTokens: ['a', 'b', 'pe-1'] });
+  check('attributes: data-*, handlers, style, nonce and unreferenced ids go; class, title and aria stay',
+    attrs, [['class', 'a b pe-1'], ['title', 'hi'], ['aria-hidden', 'true']]);
+  check('attributes: a referenced id stays and comes first',
+    E.PE_extractAttributes(fakeEl('input', { type: 'text', id: 'email', class: 'f' }), { keepIds: new Set(['email']), classTokens: ['f'] }),
+    [['id', 'email'], ['class', 'f'], ['type', 'text']]);
+  check('attributes: img uses its resolved source and loses srcset; links are made absolute',
+    [E.PE_extractAttributes(img, { imgSrc: 'https://x.test/b.png' }),
+     E.PE_extractAttributes(fakeEl('a', { href: '/p?x=1' }), { resolveUrl: (n, v) => 'https://x.test' + v })],
+    [[['src', 'https://x.test/b.png']], [['href', 'https://x.test/p?x=1']]]);
+  check('attributes: an <img> with no src gets one from currentSrc',
+    E.PE_extractAttributes(fakeEl('img', { alt: 'x' }), { imgSrc: 'https://x.test/c.png' }), [['alt', 'x'], ['src', 'https://x.test/c.png']]);
+  check('classTokens drops our animation classes and appends the generated one',
+    E.PE_extractClassTokens('card pe-erasing  wide', 'pe-4'), ['card', 'wide', 'pe-4']);
+  check('resolveUrl',
+    ['/a.png', '#frag', 'javascript:alert(1)', 'mailto:a@b.c', 'data:image/gif;base64,AA', 'rel/x']
+      .map((u) => E.PE_extractResolveUrl(u, 'https://site.test/dir/page')),
+    ['https://site.test/a.png', '#frag', '#', 'mailto:a@b.c', 'data:image/gif;base64,AA', 'https://site.test/dir/rel/x']);
+})();
+
+// printing
+(function serializeTests() {
+  const display = { div: 'block', ul: 'block', li: 'list-item', span: 'inline', b: 'inline', button: 'inline-block', pre: 'block', p: 'block' };
+  const make = (included) => ({
+    included,
+    attributes: (el) => el.attributes.map((a) => [a.name, a.value]),
+    displayOf: (el) => display[el.localName] || 'block',
+    preserves: (el) => el.localName === 'pre'
+  });
+  const run = (root) => {
+    const inc = new Set();
+    (function walk(n) { inc.add(n); n.children.forEach(walk); })(root);
+    return E.PE_extractSerialize(root, make(inc));
+  };
+
+  check('serialize: block-level children go on their own indented lines',
+    run(fakeEl('ul', { class: 'nav' }, [
+      fakeText('\n  '), fakeEl('li', {}, [fakeText('Home')]), fakeText('\n  '), fakeEl('li', {}, [fakeText('About')]), fakeText('\n')
+    ])),
+    '<ul class="nav">\n  <li>Home</li>\n  <li>About</li>\n</ul>');
+  check('serialize: text with inline children stays on one line, whitespace collapsed, edges trimmed',
+    run(fakeEl('p', {}, [fakeText('\n  Hello  '), fakeEl('b', {}, [fakeText('big')]), fakeText('  world\n')])),
+    '<p>Hello <b>big</b> world</p>');
+  check('serialize: whitespace between inline elements is kept as one space (it is visible)',
+    run(fakeEl('div', {}, [fakeEl('button', {}, [fakeText('A')]), fakeText('\n   '), fakeEl('button', {}, [fakeText('B')])])),
+    '<div><button>A</button> <button>B</button></div>');
+  check('serialize: the edge spaces of an inline element are kept',
+    run(fakeEl('div', {}, [fakeText('x'), fakeEl('span', {}, [fakeText(' pad ')]), fakeText('y')])),
+    '<div>x<span> pad </span>y</div>');
+  check('serialize: void tags have no closing tag, empty elements close on the same line',
+    run(fakeEl('div', {}, [fakeEl('hr', {}), fakeEl('div', {}, [])])),
+    '<div>\n  <hr>\n  <div></div>\n</div>');
+  check('serialize: <pre> keeps its text exactly',
+    run(fakeEl('pre', {}, [fakeText('a\n  b')])), '<pre>a\n  b</pre>');
+  check('serialize: text and attribute values are escaped',
+    run(fakeEl('p', { title: 'a "b" & c' }, [fakeText('1 < 2 & 3')])),
+    '<p title="a &quot;b&quot; &amp; c">1 &lt; 2 &amp; 3</p>');
+  check('serialize: boolean attributes have no value',
+    run(fakeEl('div', {}, [fakeEl('button', { disabled: '' }, [fakeText('x')])])),
+    '<div><button disabled>x</button></div>');
+  const keep = fakeEl('p', {}, [fakeText('keep')]);
+  const dropped = fakeEl('p', {}, [fakeText('dropped')]);
+  const root = fakeEl('div', {}, [keep, dropped]);
+  check('serialize: an element outside the extract (cut off by the cap) is not printed',
+    E.PE_extractSerialize(root, make(new Set([root, keep]))), '<div>\n  <p>keep</p>\n</div>');
+  const svgNs = E.PE_EXTRACT_SVG_NS;
+  const svg = fakeEl('svg', { viewBox: '0 0 10 10' }, [fakeEl('g', {}, [fakeEl('path', { d: 'M0 0' }, [], svgNs)], svgNs)], svgNs);
+  check('serialize: SVG structure is indented and attribute case is kept',
+    run(svg), '<svg viewBox="0 0 10 10">\n  <g>\n    <path d="M0 0"></path>\n  </g>\n</svg>');
+})();
+
+// colours
+check('rgbToHex',
+  ['rgb(26, 43, 60)', 'rgba(0, 0, 0, 0.5)', 'rgba(255, 0, 0, 1)', 'rgb(26 43 60 / 50%)', 'red', 'rgba(1,2,3,0)']
+    .map(E.PE_extractRgbToHex),
+  ['#1a2b3c', '#00000080', '#ff0000', '#1a2b3c80', null, '#01020300']);
+check('collectColors: distinct, counted, most used first, transparent ignored', E.PE_extractCollectColors([
+  'rgb(1, 1, 1)', '1px solid rgb(1, 1, 1)', 'rgb(2, 2, 2)', 'rgba(0, 0, 0, 0)', 'linear-gradient(rgb(2, 2, 2), rgba(9, 9, 9, 0.5))', 'none'
+]), [{ hex: '#010101', count: 2 }, { hex: '#020202', count: 2 }, { hex: '#09090980', count: 1 }]);
+
+// fonts
+check('parseFontFamily handles quotes, commas inside quotes and generics',
+  E.PE_extractParseFontFamily('Inter, "Helvetica Neue", \'Comma, Sans\', sans-serif'),
+  ['Inter', 'Helvetica Neue', 'Comma, Sans', 'sans-serif']);
+check('parseFontSrc finds urls and formats and makes them absolute',
+  E.PE_extractParseFontSrc('url("/f/a.woff2") format("woff2"), url(b.ttf) format(\'truetype\'), local(Arial)', 'https://site.test/css/main.css'),
+  [{ url: 'https://site.test/f/a.woff2', format: 'woff2' }, { url: 'https://site.test/css/b.ttf', format: 'truetype' }]);
+check('tokensText: fonts as comments, colours as a :root block, notes last',
+  E.PE_extractTokensText(
+    [{ family: 'Inter', stack: 'Inter, sans-serif', count: 3, web: true, faces: [{ weight: '400', style: 'normal', status: 'loaded', urls: [{ url: 'https://x.test/i.woff2', format: 'woff2' }] }] },
+     { family: 'sans-serif', stack: 'sans-serif', count: 1, web: false, faces: [] }],
+    [{ hex: '#111111', count: 4 }], ['a note']),
+  ['/* Fonts */', '/* Inter, sans-serif — 3 elements */', '/*   Inter 400 normal · loaded */', '/*   https://x.test/i.woff2 (woff2) */',
+   '/* sans-serif — 1 element */', '/*   no @font-face found: a system or generic font */', '',
+   '/* Colors */', ':root {', '  --pe-color-1: #111111; /* 4× */', '}', '', '/* a note */'].join('\n'));
+check('wrapDocument builds a standalone file and cannot be broken out of by </style>',
+  (() => {
+    const doc = E.PE_extractWrapDocument('A & B', '<p class="pe-1">x</p>', '.pe-1{content:"</style>"}');
+    return [doc.startsWith('<!DOCTYPE html>'), doc.includes('<title>A &amp; B</title>'), doc.includes('<body>\n<p class="pe-1">x</p>\n</body>'),
+            (doc.match(/<\/style>/g) || []).length];
+  })(), [true, true, true, 1]);
+
+// highlighting
+(function highlightTests() {
+  const html = '<div class="a b" hidden>\n  <p title=\'x "y"\'>He said "hi" &amp; left</p><img src=a.png />\n</div>';
+  const css = '/* c */\n.pe-1 {\n  color: rgb(1, 2, 3);\n  --x: #fff;\n  content: "a;b";\n  margin: -4px 0 1.5em;\n}\n.pe-1::before { content: "}" }';
+  const join = (tokens) => tokens.map((t) => t.s).join('');
+  check('highlightHtml is lossless', join(E.PE_highlightHtml(html)), html);
+  check('highlightCss is lossless', join(E.PE_highlightCss(css)), css);
+  const kinds = (tokens, want) => tokens.filter((t) => t.t === want).map((t) => t.s);
+  const h = E.PE_highlightHtml(html);
+  check('highlightHtml: tags, attributes and quoted values',
+    [kinds(h, 'tag'), kinds(h, 'attr'), kinds(h, 'string')],
+    [['div', 'p', 'p', 'img', 'div'], ['class', 'hidden', 'title', 'src'], ['"a b"', '\'x "y"\'', 'a.png']]);
+  check('highlightHtml: quotes in text content are plain text', h.some((t) => t.t !== 'text' && t.s.indexOf('said') >= 0), false);
+  const c = E.PE_highlightCss(css);
+  check('highlightCss: selectors, properties, custom properties, colours, numbers, strings, comments',
+    [kinds(c, 'selector').map((s) => s.trim()), kinds(c, 'prop'), kinds(c, 'var'), kinds(c, 'color'), kinds(c, 'string'), kinds(c, 'comment'), kinds(c, 'func'), kinds(c, 'number')],
+    [['.pe-1', '.pe-1::before'], ['color', 'content', 'margin', 'content'], ['--x'], ['#fff'], ['"a;b"', '"}"'], ['/* c */'], ['rgb'], ['1', '2', '3', '-4px', '0', '1.5em']]);
+  check('highlighters survive broken input without hanging or losing text',
+    ['<', '<a', '<a href="x', '<a b=', '</', '<!-- x'].map((s) => join(E.PE_highlightHtml(s)) === s)
+      .concat(['{', '.a {', '.a { color:', '.a { color: "x', '/* open', '}}'].map((s) => join(E.PE_highlightCss(s)) === s)),
+    new Array(12).fill(true));
+})();
+
+check('diff: colour longhands that only resolve currentcolor (row-rule, text-stroke) are not written without a rule or stroke',
+  E.PE_extractDiffStyles(['row-rule-color', 'row-rule-style', '-webkit-text-stroke-color', '-webkit-text-stroke-width'],
+    mapGetter({ 'row-rule-color': 'rgb(170, 0, 0)', 'row-rule-style': 'none', '-webkit-text-stroke-color': 'rgb(170, 0, 0)', '-webkit-text-stroke-width': '0px' }),
+    mapGetter({ 'row-rule-color': 'rgb(0, 0, 0)', 'row-rule-style': 'none', '-webkit-text-stroke-color': 'rgb(0, 0, 0)', '-webkit-text-stroke-width': '0px' }),
+    null, { isRoot: true, keepSize: true }), []);
+// wiring
+const extractJs = read('modes/extract.js');
+const extractCoreJs = read('modes/extract-core.js');
+check('manifest has the Alt+Shift+C command, background forwards it, content.js handles it',
+  [!!manifest.commands['toggle-extract'] && !manifest.commands['toggle-extract'].suggested_key,
+   bgJs.includes("'toggle-extract': 'TOGGLE_EXTRACT'"), contentJs.includes("case 'TOGGLE_EXTRACT'"),
+   contentJs.includes("keyUpper === 'C' && e.altKey"), contentJs.includes("modes.register('extract'")],
+  [true, true, true, true, true]);
+check('manifest: at most 4 commands carry a suggested_key (Chrome refuses to load the extension otherwise)',
+  Object.values(manifest.commands).filter((c) => c.suggested_key).length <= 4, true);
+check('extractFrom hides the pickers own body cursor while measuring and puts it back',
+  /removeProperty\('cursor'\);[\s\S]*?PE_extractRun\(el[\s\S]*?finally \{\s*if \(cursor\) body\.style\.setProperty\('cursor'/.test(extractJs), true);
+check('extract exit() removes the empty style attribute the cursor reset leaves on <body>',
+  /getAttribute\('style'\) === ''\) document\.body\.removeAttribute\('style'\)/.test(extractJs), true);
+check('diff: an inherited value equal to the parent is still written when the browser has its own rule for the tag (a:any-link colour)',
+  E.PE_extractDiffStyles(['color'], mapGetter({ color: 'rgb(255, 255, 255)' }), mapGetter({ color: 'rgb(0, 0, 238)' }),
+    mapGetter({ color: 'rgb(255, 255, 255)' }), { isRoot: false, keepSize: false, base: mapGetter({ color: 'rgb(0, 0, 0)' }) }).map((d) => d[0]), ['color']);
+check('diff: ...but not when the tag has no rule of its own (ref equals the div baseline)',
+  E.PE_extractDiffStyles(['color'], mapGetter({ color: 'rgb(255, 255, 255)' }), mapGetter({ color: 'rgb(0, 0, 0)' }),
+    mapGetter({ color: 'rgb(255, 255, 255)' }), { isRoot: false, keepSize: false, base: mapGetter({ color: 'rgb(0, 0, 0)' }) }), []);
+check('logical corner radii (border-end-end-radius…) are not written next to border-radius',
+  [E.PE_extractSkipProp('border-end-end-radius'), E.PE_extractSkipProp('border-start-start-radius'), E.PE_extractSkipProp('border-top-left-radius')], [true, true, false]);
+check('extract.js: link probes get an href, buttons and shrink-wrapped / empty / flex-grid-item boxes keep their size',
+  [extractJs.includes("probe.setAttribute('href', '#')"), /PE_EXTRACT_REPLACED = new Set\(\[[^\]]*'button'/.test(extractJs),
+   extractJs.includes('!hasContent || PE_EXTRACT_SHRINK_DISPLAYS.has(cs.display)'), extractJs.includes('PE_EXTRACT_ITEM_PARENTS.test(parentCs.display)')],
+  [true, true, true, true]);
+check('copy asks the permissions policy before navigator.clipboard (no violation noise in the page console)',
+  extractJs.includes("policy.allowsFeature('clipboard-write')"), true);
+check('Extract never talks to a server or the downloads API and adds no permission',
+  [/fetch\(|XMLHttpRequest|sendBeacon|WebSocket|chrome\.downloads|chrome\.runtime|chrome\.storage/.test(extractJs + extractCoreJs),
+   manifest.permissions.slice().sort()],
+  [false, ['activeTab', 'contextMenus', 'storage']]);
+check('Extract puts page text on screen only through textContent: the single innerHTML is the static window template',
+  [extractJs, extractCoreJs].map((src) =>
+    (src.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n').match(/innerHTML/g) || []).length),
+  [1, 0]);
+check('Extract leaves the page\'s own elements alone (no writes to measured elements)',
+  /\b(el|root|child|target)\.(setAttribute|removeAttribute|classList\.(add|remove|toggle))\(|\b(el|root|child)\.style\.[a-zA-Z]+\s*=/.test(
+    extractJs.split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n')),
+  false);
+check('extract colours in content.css exist for the picker and the window',
+  ['.pe-highlighter.pe-extract-mode', '.pe-extract-panel', '.pe-extract-code', '.pe-tok-tag'].filter((s) => !contentCss.includes(s)), []);
+
+// Content scripts share one global scope. A second top-level const/class/function
+// with the same name in another file is a SyntaxError that stops the whole
+// script from loading — on every page.
+(function globalNameTests() {
+  const seen = new Map();
+  const dupes = [];
+  for (const file of csJs.filter((f) => f !== 'content.js')) {
+    for (const m of read(file).matchAll(/^(?:const|let|var|class|function)\s+([A-Za-z_$][\w$]*)/gm)) {
+      if (seen.has(m[1])) dupes.push(`${m[1]} (${seen.get(m[1])} and ${file})`);
+      else seen.set(m[1], file);
+    }
+  }
+  check('no two content-script files declare the same top-level name', dupes, []);
+})();
 
 /* ─── Result ─────────────────────────────────────────────── */
 console.log('');
