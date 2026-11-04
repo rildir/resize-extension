@@ -75,6 +75,18 @@ same click. `modes/erase.js` is the element picker. A mode that ends on its own
 in order before `content.js`; they are classic scripts sharing one global scope,
 like `shared.js`.
 
+`modes/xray.js` (Layout X-Ray) is the second real mode. Its first half is pure
+functions — display-type classification, grid/flex gap geometry, label text — so
+the tests can run them in Node; the second half draws on one fixed `<canvas>`
+appended to `<html>` (not `<body>`, which its `MutationObserver` watches, so its
+own nodes cannot feed back into it). It collects elements once, caches their
+computed-style facts, and redraws at most once per animation frame; a DOM
+mutation marks the list stale and it is rebuilt at most every 250 ms. Capture
+goes through the service worker (`captureVisibleTab`, covered by `activeTab`,
+which the browser only grants after the user has invoked the extension on that
+tab) and the PNG is saved from the page via a blob link, so the `downloads`
+permission is not needed.
+
 The eraser wipe is not a mode: it is a CSS `mask-image` animation
 (`.pe-erasing` / `.pe-restoring` in `content.css`) that `content.js` adds to the
 element for 350 ms. While it plays, the element's stylesheet rule is held back
@@ -281,7 +293,7 @@ additional permissions, so it is tracked separately.
 
 ## 8. Testing
 
-`node tests/run.js` — no browser, no dependencies, 84 checks:
+`node tests/run.js` — no browser, no dependencies, 122 checks:
 
 - **Unit tests** for `shared.js`: selector validation (including the
   `CSS.escape` case and each injection vector), domain scoping (with a
@@ -300,6 +312,11 @@ additional permissions, so it is tracked separately.
     every one of them is in the shipping list;
   - the wipe length in `content.js` equals the one in `content.css`, sits in the
     300–400 ms range, and honours `prefers-reduced-motion`.
+- **Unit tests** for the Layout X-Ray helpers: display-type colour family, px and
+  grid-track parsing, grid/flex/wrapped-flex gap lines (including reverse
+  directions and spacing that is *not* the declared gap), label text, and static
+  guards — no network or `downloads` use, no writes to measured elements, legend
+  colours in CSS equal the ones the canvas draws with.
 - **Unit tests** for the mode manager against a fake page: one mode at a time,
   listeners attached only for defined hooks and all removed on exit, pointer
   moves throttled to one per frame, no call into a mode after it has ended,
@@ -309,7 +326,7 @@ additional permissions, so it is tracked separately.
 same on every push and uploads the packaged ZIP as an artifact.
 
 What is **not** covered: anything requiring a real browser — actual injection
-timing, the wipe animation itself, paint mode, cross-browser rendering. Those are manual. A Puppeteer
+timing, the wipe animation itself, the X-Ray overlay's rendering and Capture, paint mode, cross-browser rendering. Those are manual. A Puppeteer
 harness loading the unpacked extension is the obvious next step.
 
 ---

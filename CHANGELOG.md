@@ -4,6 +4,57 @@ All notable changes to PageEraser are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] — 2026-11-04
+
+### Added
+
+- **Layout X-Ray** (`modes/xray.js`). One click — the toolbar button, the
+  *Actions* menu or `Alt+Shift+X` — draws every visible element's box on a
+  single fixed canvas that ignores the pointer: flex orange, grid purple, block
+  blue, inline-block green; margin shaded orange and padding green; flex and
+  grid gaps as dashed lines. Hovering an element shows `tag.class`, its size,
+  its `display` value and its columns and gap. A 1–10 depth slider (default 4,
+  remembered) keeps large pages readable. Redraws are coalesced to one per
+  frame; elements outside the viewport are not drawn; at most 5000 elements are
+  collected and 3000 drawn per frame.
+- **Capture.** The overlay's toolbar saves the visible tab, overlay included, as
+  a PNG. The screenshot comes from the service worker (`captureVisibleTab`, which
+  `activeTab` already covers) and is saved from the page through a blob link, so
+  no permission is added and nothing is sent anywhere.
+- The mode leaves nothing behind: leaving it removes the canvas, label and
+  toolbar, every listener and the observers it used. The page's own elements are
+  only ever read, never modified.
+
+### Changed
+
+- Mode pointer hooks now receive the cursor position (`clientX`, `clientY`).
+
+### Fixed
+
+- **X-Ray toolbar could not be dragged sideways on right-to-left pages.** It was
+  pinned with `right` in the stylesheet while dragging only sets `left`; an RTL
+  page honours `right`. The toolbar is now anchored by `left` from the start.
+- **X-Ray scrolling cost on very large pages.** Every frame read the bounding
+  box of every collected element (up to 5000) although about a hundred are on
+  screen, causing long tasks while scrolling a 5000-element page. Only the
+  elements within a few viewports of the screen are now re-read each frame; the
+  list is rebuilt after a viewport of scrolling, once a second, and whenever
+  the layout may have moved.
+
+### Known limitations
+
+- Capture only works once the extension has been invoked on the tab (toolbar
+  button, keyboard command or right-click menu) — that is what grants
+  `activeTab`. If X-Ray was started by the in-page fallback shortcut instead,
+  the toolbar says so.
+- Chrome only auto-assigns a handful of suggested shortcuts per extension (the
+  limit is around four), and this version uses all four. A further command would
+  have to be assigned by the user at `chrome://extensions/shortcuts`; the in-page
+  fallback (`Ctrl+Shift+X` / `Alt+Shift+X`) keeps working in the meantime.
+- Gaps given as percentages are not drawn, and flex gaps are inferred from the
+  children's positions, so unusual `justify-content` layouts can miss a line.
+- An element clipped by an ancestor's `overflow` is still outlined in full.
+
 ## [1.7.0] — 2026-11-04
 
 ### Added

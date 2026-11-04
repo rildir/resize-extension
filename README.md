@@ -12,7 +12,7 @@
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-1.7.0-FF4757?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-1.8.0-FF4757?style=for-the-badge)]()
 
 *A Chrome/Edge extension wrapped in a nostalgic Windows 95 aesthetic — because cleaning up the web should be fun.*
 
@@ -101,6 +101,15 @@ A full-featured transparent drawing overlay on any webpage:
 - **Eraser** — Custom cursor eraser with adjustable size
 - **16-Color Palette** — Authentic MS Paint color grid
 - **Undo / Clear** — Full undo history (up to 20 states)
+
+### 🩻 Layout X-Ray
+One click shows how a page is built, drawn on a single overlay that lets clicks through:
+- **Colour-coded boxes** — flex orange, grid purple, block blue, inline-block green
+- **Margin and padding** shaded (orange / green), **flex and grid gaps** as dashed lines
+- **Hover label** — `tag.class`, size, `display`, columns and gap
+- **Depth slider** (1–10, default 4) keeps big pages readable; elements off-screen are not drawn
+- **Capture** saves the visible tab, overlay included, as a PNG (nothing leaves your computer)
+- Start it from the toolbar button or `Alt+Shift+X`; `Esc` or the close button removes it without a trace
 
 ### 📎 Clippy Assistant
 - **Contextual Tips** — Clippy reacts when you hover UI elements
@@ -193,6 +202,7 @@ Right-click any element on a page to access:
 | `Ctrl+Shift+E` | Toggle Selection Mode |
 | `Ctrl+Shift+Y` | Restore All Layout |
 | `Ctrl+Shift+K` | Start Paintbrush 95 |
+| `Alt+Shift+X` | Toggle Layout X-Ray (`Ctrl+Shift+X` also works while the page has focus) |
 | `Ctrl+Z` | Undo last erased element (on page) |
 
 ### In Selection Mode
