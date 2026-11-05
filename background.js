@@ -140,7 +140,8 @@ chrome.commands.onCommand.addListener(async (command) => {
       'reset-layout': 'RESET_SITE',
       'start-paint': 'START_PAINT',
       'toggle-xray': 'TOGGLE_XRAY',
-      'toggle-extract': 'TOGGLE_EXTRACT'
+      'toggle-extract': 'TOGGLE_EXTRACT',
+      'toggle-diff': 'TOGGLE_DIFF'
     };
 
     const type = messageTypes[command];

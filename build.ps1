@@ -27,6 +27,8 @@ $files = @(
     'modes/xray.js',
     'modes/extract-core.js',
     'modes/extract.js',
+    'modes/diff-core.js',
+    'modes/diff.js',
     'locales.js',
     'popup.html',
     'popup.css',

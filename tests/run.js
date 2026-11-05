@@ -332,7 +332,7 @@ function freshPage() {
 console.log('content scripts — load order, shipping, animation timing');
 const csJs = manifest.content_scripts[0].js;
 check('content scripts load shared.js, then the modes, then content.js',
-  csJs, ['shared.js', 'modes/index.js', 'modes/erase.js', 'modes/xray.js', 'modes/extract-core.js', 'modes/extract.js', 'content.js']);
+  csJs, ['shared.js', 'modes/index.js', 'modes/erase.js', 'modes/xray.js', 'modes/extract-core.js', 'modes/extract.js', 'modes/diff-core.js', 'modes/diff.js', 'content.js']);
 
 const shippedAll = [...buildScript.matchAll(/^\s*'([^']+)',?\s*$/gm)].map((m) => m[1]);
 check('every manifest content script is listed in build.ps1', csJs.filter((f) => !shippedAll.includes(f)), []);
@@ -784,6 +784,117 @@ check('Extract leaves the page\'s own elements alone (no writes to measured elem
   false);
 check('extract colours in content.css exist for the picker and the window',
   ['.pe-highlighter.pe-extract-mode', '.pe-extract-panel', '.pe-extract-code', '.pe-tok-tag'].filter((s) => !contentCss.includes(s)), []);
+
+/* ─── 10. Visual Diff ────────────────────────────────────── */
+console.log('modes/diff-core.js — pure helpers');
+const D = require(path.join(ROOT, 'modes/diff-core.js'));
+
+check('normalizeSettings: no input gives the defaults',
+  D.PE_diffNormalizeSettings(undefined),
+  { x: 0, y: 0, scale: 100, opacity: 50, scrollLock: true, invert: false, blend: false, split: false, threshold: 16 });
+check('normalizeSettings: values are clamped, rounded and typed',
+  D.PE_diffNormalizeSettings({ x: '12.6', y: -99999, scale: 999, opacity: -5, scrollLock: false, invert: true, blend: 'yes', split: 1, threshold: 500 }),
+  { x: 13, y: -20000, scale: 200, opacity: 0, scrollLock: false, invert: true, blend: false, split: false, threshold: 128 });
+check('normalizeSettings: junk falls back to the defaults',
+  D.PE_diffNormalizeSettings({ x: 'abc', scale: null, opacity: NaN, scrollLock: 'no', threshold: undefined }),
+  { x: 0, y: 0, scale: 50, opacity: 50, scrollLock: true, invert: false, blend: false, split: false, threshold: 16 });
+
+check('imageProblem: type, size and dimensions',
+  [D.PE_diffImageProblem({ type: 'image/png', size: 100 }),
+   D.PE_diffImageProblem({ type: 'image/gif', size: 100 }),
+   D.PE_diffImageProblem({ type: 'image/webp', size: 30 * 1024 * 1024 }),
+   D.PE_diffImageProblem({ type: 'image/jpeg', size: 100, width: 1920, height: 1080 }),
+   D.PE_diffImageProblem({ type: 'image/jpeg', size: 100, width: 20000, height: 100 }),
+   D.PE_diffImageProblem({ type: 'image/jpeg', size: 100, width: 9000, height: 9000 }),
+   D.PE_diffImageProblem({ type: 'image/png', size: 100, width: 0, height: 10 })],
+  [null, 'type', 'size', null, 'dimensions', 'dimensions', 'dimensions']);
+
+check('parseDataUrl decodes base64 and rejects anything else',
+  [JSON.stringify(Array.from(D.PE_diffParseDataUrl('data:image/png;base64,AAEC').bytes)), D.PE_diffParseDataUrl('data:image/png;base64,AAEC').mime,
+   D.PE_diffParseDataUrl('http://x.test/a.png'), D.PE_diffParseDataUrl('data:text/plain,hello')],
+  ['[0,1,2]', 'image/png', null, null]);
+
+check('nudge: arrows move 1 px, Shift moves 10, other keys do nothing',
+  [D.PE_diffNudge('ArrowLeft', false), D.PE_diffNudge('ArrowDown', true), D.PE_diffNudge('ArrowUp', false), D.PE_diffNudge('a', false)],
+  [{ dx: -1, dy: 0 }, { dx: 0, dy: 10 }, { dx: 0, dy: -1 }, null]);
+
+check('splitInset: how much of the design is cut on the right',
+  [D.PE_diffSplitInset(100, 400, 300), D.PE_diffSplitInset(100, 400, 50), D.PE_diffSplitInset(100, 400, 900)],
+  [200, 400, 0]);
+
+// comparison
+(function compareTests() {
+  const w = 4, h = 2;
+  const page = new Uint8ClampedArray(w * h * 4).fill(100);
+  const design = new Uint8ClampedArray(w * h * 4).fill(100);
+  for (let p = 0; p < w * h; p++) design[p * 4 + 3] = 255;
+  design[0] = 117;            // pixel 0: red is 17 away  -> differs at threshold 16
+  design[4 + 1] = 116;        // pixel 1: green is 16 away -> does not (not above)
+  design[2 * 4 + 2] = 40;     // pixel 2: blue is 60 away  -> differs
+  design[3 * 4 + 3] = 0;      // pixel 3: the design does not cover it
+  design[4 * 4 + 3] = 127;    // pixel 4: barely transparent -> not covered
+
+  const r = D.PE_diffCompare(page, design, w, h, 16);
+  check('compare: strictly above the threshold per channel, uncovered pixels ignored',
+    [r.compared, r.different, Array.from(r.mask).join('')], [6, 2, '10100000']);
+  check('compare: percentage of the compared pixels', Math.round(r.percent * 100) / 100, 33.33);
+  check('compare: a stricter threshold finds more, a looser one less',
+    [D.PE_diffCompare(page, design, w, h, 0).different, D.PE_diffCompare(page, design, w, h, 100).different], [3, 0]);
+  check('compare: nothing covered means nothing compared',
+    [D.PE_diffCompare(page, new Uint8ClampedArray(w * h * 4), w, h, 16).compared, D.PE_diffCompare(page, new Uint8ClampedArray(w * h * 4), w, h, 16).percent], [0, 0]);
+})();
+
+// regions
+(function regionTests() {
+  const w = 64, h = 32;
+  const mask = new Uint8Array(w * h);
+  const fill = (x0, y0, x1, y1) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) mask[y * w + x] = 1; };
+  fill(0, 0, 8, 8);          // one cell
+  fill(24, 0, 32, 8);        // another, not touching
+  fill(8, 8, 16, 16);        // touches the first diagonally -> same region
+  fill(40, 20, 41, 21);      // a single stray pixel: noise
+  const r = D.PE_diffRegions(mask, w, h);
+  check('regions: touching cells (diagonals too) are one region, a stray pixel is none',
+    [r.count, r.boxes.length], [2, 2]);
+  check('regions: bounding boxes in px',
+    r.boxes.map((b) => [b.x, b.y, b.w, b.h]).sort(), [[0, 0, 16, 16], [24, 0, 8, 8]].sort());
+  check('regions: an empty mask has none', D.PE_diffRegions(new Uint8Array(w * h), w, h).count, 0);
+  check('regions: a size that is not a multiple of the cell still works',
+    D.PE_diffRegions((() => { const m = new Uint8Array(10 * 10); m.fill(1); return m; })(), 10, 10).boxes, [{ x: 0, y: 0, w: 10, h: 10 }]);
+})();
+
+check('heatPixels: translucent red where the mask is set',
+  Array.from(D.PE_diffHeatPixels(new Uint8Array([1, 0]), 2, 1)), [255, 0, 0, 140, 0, 0, 0, 0]);
+
+// wiring
+const diffJs = read('modes/diff.js');
+const diffCoreJs = read('modes/diff-core.js');
+const codeOnly = (src) => src.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+check('manifest has the toggle-diff command with no default key (all four are taken); background and content.js handle it',
+  [!!manifest.commands['toggle-diff'] && !manifest.commands['toggle-diff'].suggested_key,
+   bgJs.includes("'toggle-diff': 'TOGGLE_DIFF'"), contentJs.includes("case 'TOGGLE_DIFF'"),
+   contentJs.includes("keyUpper === 'V' && e.altKey"), contentJs.includes("modes.register('diff'")],
+  [true, true, true, true, true]);
+check('Visual Diff never talks to a server or the downloads API and adds no permission',
+  [/fetch\(|XMLHttpRequest|sendBeacon|WebSocket|chrome\.downloads|chrome\.runtime|chrome\.storage/.test(codeOnly(diffJs + diffCoreJs)),
+   manifest.permissions.slice().sort()],
+  [false, ['activeTab', 'contextMenus', 'storage']]);
+check('the design is drawn from a decoded bitmap on a canvas, never an <img> the page\'s CSP could block',
+  [/new Image\(|createElement\('img'\)|<img/.test(codeOnly(diffJs)), codeOnly(diffJs).includes('createImageBitmap')], [false, true]);
+check('Visual Diff: one innerHTML (the static toolbar), the privacy line is in the toolbar, storage is capped at 5 MB',
+  [(codeOnly(diffJs).match(/innerHTML/g) || []).length, diffJs.includes('${t.local}'), D.PE_DIFF_MAX_STORED_CHARS], [2, true, 5 * 1024 * 1024]);
+check('Visual Diff colours and layers exist in content.css',
+  ['.pe-diff-layer', '.pe-diff-heat', '.pe-diff-divider', '.pe-diff-toolbar', '.pe-diff-drop'].filter((s) => !contentCss.includes(s)), []);
+check('a failed storage write (quota) must not be treated as a lost extension',
+  (contentJs.match(/if \(!isContextAlive\(\)\) noteContextLost\(\);/g) || []).length, 3);
+check('Compare keeps every extension overlay out of the capture: layers, toolbar, toast container and Clippy are hidden',
+  [diffJs.includes('[layer, heat, divider, toolbar, '), diffJs.includes("getElementById('pe-toast-container')"), diffJs.includes("getElementById('pe-clippy-buddy')")], [true, true, true]);
+check('Compare takes the design and the heat map out of layout (display:none) for the capture, not just visibility:hidden, and puts their display back afterwards',
+  [diffJs.includes('const inLayout = [layer, heat];'), diffJs.includes("n.style.setProperty('display', 'none', 'important')"),
+   diffJs.includes("n.style.removeProperty('display');"), diffJs.includes('if (displays[i]) n.style.display = displays[i];')], [true, true, true, true]);
+check('paste, drag-over and drop are listened for on window in the capture phase, so a page that stops them on its own capture listener cannot block them',
+  [diffJs.includes("listen(window, 'paste', onPaste, true)"), diffJs.includes("listen(window, 'drop'"), diffJs.includes("listen(window, 'dragover'"),
+   /listen\(document, 'paste'/.test(diffJs), /ui\.drop\.addEventListener\('drop'/.test(diffJs)], [true, true, true, false, false]);
 
 // Content scripts share one global scope. A second top-level const/class/function
 // with the same name in another file is a SyntaxError that stops the whole

@@ -16,6 +16,7 @@
   const btnSelect     = document.getElementById('btn-select');
   const btnXray       = document.getElementById('btn-xray');
   const btnExtract    = document.getElementById('btn-extract');
+  const btnDiff       = document.getElementById('btn-diff');
   const btnReset      = document.getElementById('btn-reset');
   const domainNameEl  = document.getElementById('domain-name');
   const hiddenCountEl = document.getElementById('hidden-count');
@@ -158,6 +159,7 @@
         btnSelect.disabled = false;
         btnXray.disabled = false;
         btnExtract.disabled = false;
+        btnDiff.disabled = false;
         await refreshSelectorsList();
       } else {
         currentDomain = '';
@@ -165,6 +167,7 @@
         btnSelect.disabled = true;
         btnXray.disabled = true;
         btnExtract.disabled = true;
+        btnDiff.disabled = true;
         btnReset.disabled = true;
         selectorsList.innerHTML = `<div class="empty-state">${LOCALES[currentLang].noElements}</div>`;
         hiddenCountEl.textContent = '0';
@@ -1102,6 +1105,17 @@
   }
   btnExtract.addEventListener('click', toggleExtract);
   document.getElementById('menu-item-extract').addEventListener('click', toggleExtract);
+
+  // ─── Visual Diff ───────────────────────────────────────────
+  // Started from here (toolbar button), the extension holds activeTab for this
+  // page, which the Compare button needs to capture it.
+  async function toggleDiff() {
+    RetroAudio.playSelection();
+    await sendMessageToTab({ type: 'TOGGLE_DIFF' });
+    window.close();
+  }
+  btnDiff.addEventListener('click', toggleDiff);
+  document.getElementById('menu-item-diff').addEventListener('click', toggleDiff);
 
   // ─── Paint Webpage Actions Menu Trigger ────────────────────
   const paintBtn = document.getElementById('menu-item-paint');

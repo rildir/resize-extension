@@ -83,6 +83,10 @@
               <span data-i18n="extractBtn">Extract to Code</span>
               <span class="menu-shortcut">Alt+Shift+C</span>
             </div>
+            <div class="dropdown-item" id="menu-item-diff">
+              <span data-i18n="diffBtn">Visual Diff</span>
+              <span class="menu-shortcut">Alt+Shift+V</span>
+            </div>
           </div>
         </div>
         <div class="menu-item-container">
@@ -225,6 +229,16 @@
             <span data-i18n="extractBtn">Extract to Code</span>
           </button>
         </div>
+        <div style="width: 100%; margin-top: 4px">
+          <button
+            class="win-btn"
+            id="btn-diff"
+            type="button"
+            style="width: 100%"
+          >
+            <span data-i18n="diffBtn">Visual Diff</span>
+          </button>
+        </div>
 
         <!-- Modified Elements sunken panel with search filter -->
         <div class="list-section">
@@ -363,6 +377,12 @@
             <span class="key-label">Alt+Shift+C</span>
             <span class="key-desc" data-i18n="toggleExtract"
               >Toggle Extract to Code</span
+            >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Alt+Shift+V</span>
+            <span class="key-desc" data-i18n="toggleDiff"
+              >Toggle Visual Diff</span
             >
           </div>
         </fieldset>

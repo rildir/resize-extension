@@ -69,7 +69,7 @@
       try {
         return await rawStorage.get(keys);
       } catch (err) {
-        noteContextLost();
+        if (!isContextAlive()) noteContextLost();
         return {};
       }
     },
@@ -82,7 +82,8 @@
         await rawStorage.set(items);
         return true;
       } catch (err) {
-        noteContextLost();
+        // Quota exceeded and the like: the write failed, the extension is fine.
+        if (!isContextAlive()) noteContextLost();
         return false;
       }
     },
@@ -95,7 +96,7 @@
         await rawStorage.remove(keys);
         return true;
       } catch (err) {
-        noteContextLost();
+        if (!isContextAlive()) noteContextLost();
         return false;
       }
     }
@@ -256,6 +257,7 @@
       });
       this.modes.register('xray', PE_createXrayMode(this));
       this.modes.register('extract', PE_createExtractMode(this));
+      this.modes.register('diff', PE_createDiffMode(this));
 
       // Selectors whose erase sweep is still playing. Their stylesheet rule is
       // held back until the wipe finishes, otherwise the rule would hide the
@@ -355,6 +357,10 @@
 
     _saveSetting(key, value) {
       return storage.set({ [key]: value });
+    }
+
+    _removeSetting(key) {
+      return storage.remove(key);
     }
 
     /* Layout X-Ray's Capture: ask the service worker for a screenshot of the
@@ -581,7 +587,7 @@
       } catch (err) { /* best effort */ }
       try {
         // X-Ray's and Extract's exit() only remove their own nodes; no chrome.* call.
-        if (this.modes.isActive('xray') || this.modes.isActive('extract')) this.modes.deactivate();
+        if (this.modes.isActive('xray') || this.modes.isActive('extract') || this.modes.isActive('diff')) this.modes.deactivate();
       } catch (err) { /* best effort */ }
 
       // Note: #pe-stylesheet is deliberately left in place. The user asked for
@@ -1102,6 +1108,11 @@
             e.preventDefault();
             this.modes.toggle('extract');
             return;
+          } else if (keyUpper === 'V' && e.altKey) {
+            // Alt only: Ctrl+Shift+V is "paste as plain text".
+            e.preventDefault();
+            this.modes.toggle('diff');
+            return;
           }
         }
 
@@ -1132,7 +1143,7 @@
             this._stopPaintFn();
             return;
           }
-          if (this.modes.isActive('xray') || this.modes.isActive('extract')) {
+          if (this.modes.isActive('xray') || this.modes.isActive('extract') || this.modes.isActive('diff')) {
             this.modes.deactivate();
             return;
           }
@@ -1174,7 +1185,7 @@
               sendResponse({ success: true });
               break;
             case 'GET_STATUS':
-              sendResponse({ active: this.active, xray: this.modes.isActive('xray'), extract: this.modes.isActive('extract') });
+              sendResponse({ active: this.active, xray: this.modes.isActive('xray'), extract: this.modes.isActive('extract'), diff: this.modes.isActive('diff') });
               break;
             case 'RESTORE_SELECTOR':
               this._restoreSelector(msg.selector, msg.silent).then(() => {
@@ -1224,6 +1235,12 @@
             case 'START_PAINT':
               this._startPaintMode();
               sendResponse({ success: true });
+              break;
+            case 'TOGGLE_DIFF':
+              if (this.modes.toggle('diff') && !msg.silent) {
+                this._showToast(this.isTr ? 'PageEraser: Görsel Fark Aktif' : 'PageEraser: Visual Diff Active', 'info');
+              }
+              sendResponse({ success: true, active: this.modes.isActive('diff') });
               break;
             case 'TOGGLE_EXTRACT':
               if (this.modes.toggle('extract') && !msg.silent) {
