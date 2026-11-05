@@ -100,6 +100,19 @@ the site's own resets (`* { margin: 0 }`) as browser defaults — and the iframe
 removed as soon as one extraction is done. The result window is built once; code
 goes into it as `textContent` and `<span>`s, never as HTML.
 
+`modes/diff.js` (Visual Diff) is the fourth. The design is a decoded bitmap
+drawn on a `<canvas>`, deliberately not an `<img>`: an image element is subject to
+the page's `img-src` policy, a canvas is not. Compare asks the service worker for
+the visible tab — with the extension's own layers hidden for two frames first, so
+only the page is in the shot — then draws the design where the overlay sits onto a
+canvas of the same size as the screenshot and hands both pixel buffers to
+`modes/diff-core.js`, which is pure: a per-channel threshold, differing cells of
+8×8 px grouped into regions by flood fill, and the heat-map pixels. Anything that
+moves or rescales the design clears the heat map, because it would describe a
+layout that no longer exists. A write to `chrome.storage.local` that fails (quota)
+is reported to the user and does not take the extension down: the storage facade
+only declares the context lost when `chrome.runtime.id` is really gone.
+
 The eraser wipe is not a mode: it is a CSS `mask-image` animation
 (`.pe-erasing` / `.pe-restoring` in `content.css`) that `content.js` adds to the
 element for 350 ms. While it plays, the element's stylesheet rule is held back
@@ -306,7 +319,7 @@ additional permissions, so it is tracked separately.
 
 ## 8. Testing
 
-`node tests/run.js` — no browser, no dependencies, 178 checks:
+`node tests/run.js` — no browser, no dependencies, 209 checks:
 
 - **Unit tests** for `shared.js`: selector validation (including the
   `CSS.escape` case and each injection vector), domain scoping (with a
@@ -325,6 +338,13 @@ additional permissions, so it is tracked separately.
     every one of them is in the shipping list;
   - the wipe length in `content.js` equals the one in `content.css`, sits in the
     300–400 ms range, and honours `prefers-reduced-motion`.
+- **Unit tests** for Visual Diff's pure logic: settings clamping, image limits,
+  data-URL decoding, arrow-key nudging, the divider's clip, the threshold
+  comparison (strictly above, per channel, uncovered pixels ignored), region
+  grouping (diagonals, stray pixels, sizes that are not a multiple of the cell),
+  the heat map, and static guards (no network, the design never goes through an
+  `<img>`, the privacy line is present, a failed storage write is not a lost
+  extension).
 - **Unit tests** for Extract to Code's pure logic, against plain test doubles for
   DOM nodes: diffing against defaults and the parent (inherited vs. not, the
   currentcolor-dependent properties), shorthand folding (including a border the
@@ -348,7 +368,7 @@ additional permissions, so it is tracked separately.
 same on every push and uploads the packaged ZIP as an artifact.
 
 What is **not** covered: anything requiring a real browser — actual injection
-timing, the wipe animation itself, the X-Ray overlay's rendering and Capture, how faithfully an extract renders on its own, paint mode, cross-browser rendering. Those are manual. A Puppeteer
+timing, the wipe animation itself, the X-Ray overlay's rendering and Capture, the Visual Diff overlay, drag-and-drop, paste and Compare, how faithfully an extract renders on its own, paint mode, cross-browser rendering. Those are manual. A Puppeteer
 harness loading the unpacked extension is the obvious next step.
 
 ---

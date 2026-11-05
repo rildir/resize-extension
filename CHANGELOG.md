@@ -4,6 +4,77 @@ All notable changes to PageEraser are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.10.0] — 2026-11-05
+
+### Added
+
+- **Visual Diff** (`modes/diff.js`, `modes/diff-core.js`). Load a design image —
+  drop it on the window, choose a file, or paste it — and it is laid over the page
+  on a canvas that ignores the pointer. Controls: opacity (0–100), X/Y offset
+  (arrow keys move 1 px, `Shift` 10 px), scale (50–200 %), *scroll with the page*
+  (the design is absolutely positioned and scrolls with the document; off, it
+  stays fixed in the window), *Invert*, a *Difference* blend (`mix-blend-mode:
+  difference`) and a *Before / after* divider (design on the left, live page on the
+  right) that you drag.
+- **Compare.** Captures the visible tab with the extension's own layers hidden,
+  draws the design at its place on a canvas of the same size, and compares them
+  pixel by pixel: a pixel differs when any of R, G, B is further apart than the
+  threshold (0–128, default 16). Differing pixels are painted as a translucent red
+  heat map that stays with the page; the toolbar shows the percentage of compared
+  pixels that differ and the number of separate regions (differing cells of 8×8
+  px, at least 4 pixels each, touching cells — diagonals too — are one region).
+  Moving, scaling or replacing the design clears the heat map.
+- **Remembered per site**: offset, scale, opacity and the other settings, and the
+  image itself when its data URL fits in 5 MB (bigger images work until you leave
+  the page, and the toolbar says so). Kept in `chrome.storage.local`, nothing is
+  sent anywhere; the toolbar says "Your image stays on this computer."
+- The design is drawn from a decoded bitmap on a canvas, not shown through an
+  `<img>`, so a page's Content-Security-Policy cannot block it. Files are limited
+  to PNG/JPG/WebP, 25 MB, 16384 px per side and 40 megapixels.
+- `toggle-diff` command (no default key), in-page fallback `Alt+Shift+V` (Alt only:
+  `Ctrl+Shift+V` is the browser's "paste as plain text"), toolbar button, *Actions*
+  menu entry. No new permission.
+
+### Fixed
+
+- A storage write that fails for a reason other than a lost extension — over
+  quota, typically — was treated as "extension context lost", which stripped the
+  extension's UI from the page and silently disabled it until reload. It now only
+  does that when the context really is gone. This matters more with images in
+  storage, but it affected saving rules too.
+- Compare could report phantom differences: the "Visual Diff Active" toast (and
+  Clippy, when enabled) was still on screen when the tab was captured, so a
+  comparison started within a few seconds of opening the mode counted the toast's
+  pixels as a region. The toast container and Clippy are now hidden for the
+  capture together with the design layers and the toolbar.
+- Pasting or dropping a design did nothing on a page that stops `paste` or
+  `drop` events with its own capture-phase listener on `window` or `document`.
+  The mode now listens on `window` in the capture phase, so such a page can no
+  longer block it (the file chooser always worked).
+- Compare reported differences along the bottom edge (about 1 % on react.dev,
+  17 % on a page with a modal) when the design was as wide as the window: the
+  design layer is wider than the page's layout width (the window minus its
+  vertical scrollbar), so it adds a horizontal scrollbar while the mode is open,
+  and hiding the layer with `visibility` left that scrollbar — and the 15 px it
+  takes from the viewport — in the capture. The design and the heat map are now
+  taken out of layout (`display: none`) for the capture, so the page is compared
+  as it is without the overlay.
+
+### Known limitations
+
+- Compare needs the extension to have been invoked on the tab (toolbar button,
+  keyboard command or right-click menu): that is what grants `activeTab`. Started by
+  the in-page fallback shortcut, the toolbar says so.
+- Only the visible part of the page is compared; scroll and compare again for the
+  rest. The comparison is on the page's own pixels at the capture's resolution, so
+  a design exported at 2× should be set to 50 % scale.
+- The overlay is a layer of the page: with *scroll with the page* on, a design
+  taller than the page makes the page scrollable further while the mode is open.
+  A design wider than the page's layout width likewise shows a horizontal scrollbar
+  while the mode is open (it is left out of the picture when comparing).
+- Four commands already hold a default key, which is Chrome's limit, so this one
+  (like Extract to Code) has none until you assign it.
+
 ## [1.9.0] — 2026-11-04
 
 ### Added

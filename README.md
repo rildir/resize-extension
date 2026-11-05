@@ -12,7 +12,7 @@
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-1.9.0-FF4757?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-1.10.0-FF4757?style=for-the-badge)]()
 
 *A Chrome/Edge extension wrapped in a nostalgic Windows 95 aesthetic — because cleaning up the web should be fun.*
 
@@ -119,6 +119,15 @@ Pick an element the way the eraser does, but take it with you instead of erasing
 - Three tabs with **Copy**, plus **Copy as single HTML file**; subtrees over 500 elements are cut with a warning
 - Start it from the toolbar button or `Alt+Shift+C`; `Esc` closes it without a trace
 
+### 🎯 Visual Diff
+Lay a design (a Figma export, a screenshot) over the live page and see where they disagree:
+- **Load** a PNG, JPG or WebP by dropping it on the window, choosing a file or pasting it (`Ctrl+V`)
+- **Align** with opacity, X/Y offset (arrow keys move 1 px, `Shift` 10 px) and scale 50–200 %; *scroll with the page* pins the design to the document, off keeps it in the window
+- **Look** with *Invert*, a *Difference* blend, or a *Before / after* divider you drag: design on the left, live page on the right
+- **Compare** captures the visible page (your overlay hidden), puts the design on the same pixel grid and paints every pixel that differs by more than a per-channel threshold (default 16) as a translucent red heat map, with the percentage and the number of separate regions
+- The image and the alignment are remembered per site (images up to 5 MB) and never leave your computer
+- Start it from the toolbar button or `Alt+Shift+V`; `Esc` removes everything it added
+
 ### 📎 Clippy Assistant
 - **Contextual Tips** — Clippy reacts when you hover UI elements
 - **Random Tips** — Click Clippy for useful PageEraser tips
@@ -211,6 +220,7 @@ Right-click any element on a page to access:
 | `Ctrl+Shift+Y` | Restore All Layout |
 | `Ctrl+Shift+K` | Start Paintbrush 95 |
 | `Alt+Shift+X` | Toggle Layout X-Ray (`Ctrl+Shift+X` also works while the page has focus) |
+| `Alt+Shift+V` | Toggle Visual Diff (works while the page has focus; no default browser-wide key, assign one at `chrome://extensions/shortcuts`) |
 | `Alt+Shift+C` | Toggle Extract to Code (works while the page has focus; for a browser-wide key assign one at `chrome://extensions/shortcuts` — Chrome allows only four default shortcuts per extension and they are taken) |
 | `Ctrl+Z` | Undo last erased element (on page) |
 
