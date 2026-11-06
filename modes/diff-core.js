@@ -97,25 +97,61 @@ function PE_diffSplitInset(rectLeft, rectWidth, dividerX) {
 /* Compare two same-size RGBA buffers (the page as captured, the design drawn
  * at its place on a canvas of the same size). Only pixels the design covers
  * (alpha ≥ 128) count; a pixel differs when any of R, G, B is further apart
- * than `threshold`. */
-function PE_diffCompare(page, design, w, h, threshold) {
+ * than `threshold`.
+ *
+ * `radius` (default 0: exact) forgives a shift of up to that many px: a page
+ * pixel that differs from the design pixel at the same place still counts as
+ * equal when it matches one of the design pixels around it. That is for
+ * captures that cannot be 1:1 with the layout (125 % / 150 % display scale,
+ * where the browser snaps boxes to device pixels and the design is resampled
+ * onto the same grid) and would otherwise show a ghost along every edge. */
+function PE_diffCompare(page, design, w, h, threshold, radius) {
   const total = w * h;
   const mask = new Uint8Array(total);
+  const r = radius > 0 ? Math.floor(radius) : 0;
   let compared = 0;
   let different = 0;
   const t = threshold;
-  for (let p = 0, i = 0; p < total; p++, i += 4) {
-    if (design[i + 3] < 128) continue;
-    compared++;
-    const dr = page[i] - design[i];
-    const dg = page[i + 1] - design[i + 1];
-    const db = page[i + 2] - design[i + 2];
-    if (dr > t || dr < -t || dg > t || dg < -t || db > t || db < -t) {
+  for (let y = 0, p = 0; y < h; y++) {
+    for (let x = 0; x < w; x++, p++) {
+      const i = p * 4;
+      if (design[i + 3] < 128) continue;
+      compared++;
+      const dr = page[i] - design[i];
+      const dg = page[i + 1] - design[i + 1];
+      const db = page[i + 2] - design[i + 2];
+      if (!(dr > t || dr < -t || dg > t || dg < -t || db > t || db < -t)) continue;
+      if (r > 0 && PE_diffNearMatch(page, design, w, h, x, y, r, t)) continue;
       mask[p] = 1;
       different++;
     }
   }
   return { mask, compared, different, percent: compared ? (different * 100) / compared : 0 };
+}
+
+/* True when the page pixel at (x, y) is within `t` per channel of a design
+ * pixel — one the design covers — at most `r` px away (not counting its own place). */
+function PE_diffNearMatch(page, design, w, h, x, y, r, t) {
+  const i = (y * w + x) * 4;
+  const pr = page[i];
+  const pg = page[i + 1];
+  const pb = page[i + 2];
+  for (let oy = -r; oy <= r; oy++) {
+    const ny = y + oy;
+    if (ny < 0 || ny >= h) continue;
+    for (let ox = -r; ox <= r; ox++) {
+      if (ox === 0 && oy === 0) continue;
+      const nx = x + ox;
+      if (nx < 0 || nx >= w) continue;
+      const j = (ny * w + nx) * 4;
+      if (design[j + 3] < 128) continue;
+      const dr = pr - design[j];
+      const dg = pg - design[j + 1];
+      const db = pb - design[j + 2];
+      if (dr <= t && dr >= -t && dg <= t && dg >= -t && db <= t && db >= -t) return true;
+    }
+  }
+  return false;
 }
 
 /* Group differing pixels into regions. The mask is cut into block×block cells;
@@ -200,6 +236,6 @@ if (typeof module !== 'undefined' && module.exports) {
     PE_DIFF_DEFAULTS, PE_DIFF_MAX_STORED_CHARS, PE_DIFF_MAX_FILE_BYTES,
     PE_DIFF_MAX_SIDE, PE_DIFF_MAX_PIXELS, PE_DIFF_TYPES,
     PE_diffNormalizeSettings, PE_diffImageProblem, PE_diffParseDataUrl,
-    PE_diffNudge, PE_diffSplitInset, PE_diffCompare, PE_diffRegions, PE_diffHeatPixels
+    PE_diffNudge, PE_diffSplitInset, PE_diffCompare, PE_diffNearMatch, PE_diffRegions, PE_diffHeatPixels
   };
 }

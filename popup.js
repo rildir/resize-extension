@@ -19,6 +19,7 @@
   const btnDiff       = document.getElementById('btn-diff');
   const btnReset      = document.getElementById('btn-reset');
   const domainNameEl  = document.getElementById('domain-name');
+  const reachNotice   = document.getElementById('reach-notice');
   const hiddenCountEl = document.getElementById('hidden-count');
   const selectorsList = document.getElementById('selectors-list');
   const filterInput   = document.getElementById('filter-input');
@@ -150,9 +151,10 @@
     if (!tab) return;
     activeTabId = tab.id;
 
+    hideReachNotice();
     if (tab.url) {
       const urlObj = new URL(tab.url);
-      if (urlObj.protocol.startsWith('http')) {
+      if (urlObj.protocol.startsWith('http') && !isRestrictedPage(urlObj)) {
         const domainToUse = await getDomainToUse(urlObj.hostname);
         currentDomain = domainToUse;
         domainNameEl.textContent = currentDomain;
@@ -196,6 +198,40 @@
         resolve(null);
       }
     });
+  }
+
+  /* ─── Starting a mode on the page ────────────────────────── */
+  // Chrome keeps extensions out of its own stores, and an extension that was
+  // just installed or updated has no content script in the tabs that were
+  // already open. Either way nothing answers the message, and closing the popup
+  // straight away would look like the button did nothing.
+  function isRestrictedPage(urlObj) {
+    const host = urlObj.hostname;
+    return host === 'chromewebstore.google.com'
+      || (host === 'chrome.google.com' && urlObj.pathname.startsWith('/webstore'))
+      || (host === 'microsoftedge.microsoft.com' && urlObj.pathname.startsWith('/addons'));
+  }
+
+  function showReachNotice() {
+    reachNotice.textContent = LOCALES[currentLang].reachNotice;
+    reachNotice.hidden = false;
+  }
+
+  function hideReachNotice() {
+    reachNotice.hidden = true;
+  }
+
+  /* Sends a start/toggle message. The popup closes once the page has taken it;
+   * when nothing on the page answered it stays open and says what to do. */
+  async function launchOnTab(message) {
+    const response = await sendMessageToTab(message);
+    if (response === null) {
+      showReachNotice();
+      return false;
+    }
+    hideReachNotice();
+    window.close();
+    return true;
   }
 
   /* ─── UI Refresh & Filtering ─────────────────────────────── */
@@ -705,8 +741,7 @@
 
   document.getElementById('menu-item-select').addEventListener('click', async () => {
     RetroAudio.playSelection();
-    await sendMessageToTab({ type: 'START_SELECTION', silent: true });
-    window.close();
+    await launchOnTab({ type: 'START_SELECTION', silent: true });
   });
 
   document.getElementById('menu-item-reset').addEventListener('click', async (e) => {
@@ -980,8 +1015,7 @@
   /* ─── Main Action Elements ───────────────────────────────── */
   btnSelect.addEventListener('click', async () => {
     RetroAudio.playSelection();
-    await sendMessageToTab({ type: 'START_SELECTION', silent: true });
-    window.close();
+    await launchOnTab({ type: 'START_SELECTION', silent: true });
   });
 
   btnReset.addEventListener('click', async () => {
@@ -1091,8 +1125,7 @@
   // activeTab on this page, which the overlay's Capture button relies on.
   async function toggleXray() {
     RetroAudio.playSelection();
-    await sendMessageToTab({ type: 'TOGGLE_XRAY' });
-    window.close();
+    await launchOnTab({ type: 'TOGGLE_XRAY' });
   }
   btnXray.addEventListener('click', toggleXray);
   document.getElementById('menu-item-xray').addEventListener('click', toggleXray);
@@ -1100,8 +1133,7 @@
   // ─── Extract to Code ───────────────────────────────────────
   async function toggleExtract() {
     RetroAudio.playSelection();
-    await sendMessageToTab({ type: 'TOGGLE_EXTRACT' });
-    window.close();
+    await launchOnTab({ type: 'TOGGLE_EXTRACT' });
   }
   btnExtract.addEventListener('click', toggleExtract);
   document.getElementById('menu-item-extract').addEventListener('click', toggleExtract);
@@ -1111,8 +1143,7 @@
   // page, which the Compare button needs to capture it.
   async function toggleDiff() {
     RetroAudio.playSelection();
-    await sendMessageToTab({ type: 'TOGGLE_DIFF' });
-    window.close();
+    await launchOnTab({ type: 'TOGGLE_DIFF' });
   }
   btnDiff.addEventListener('click', toggleDiff);
   document.getElementById('menu-item-diff').addEventListener('click', toggleDiff);
@@ -1122,8 +1153,7 @@
   if (paintBtn) {
     paintBtn.addEventListener('click', async () => {
       RetroAudio.playSelection();
-      await sendMessageToTab({ type: 'START_PAINT' });
-      window.close();
+      await launchOnTab({ type: 'START_PAINT' });
     });
   }
 

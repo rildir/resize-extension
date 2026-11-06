@@ -20,6 +20,8 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
 let failures = 0;
 let checks = 0;
+// Checks that have to wait for a promise (async functions under test).
+const pending = [];
 
 function check(label, actual, expected) {
   checks++;
@@ -844,6 +846,39 @@ check('splitInset: how much of the design is cut on the right',
     [D.PE_diffCompare(page, new Uint8ClampedArray(w * h * 4), w, h, 16).compared, D.PE_diffCompare(page, new Uint8ClampedArray(w * h * 4), w, h, 16).percent], [0, 0]);
 })();
 
+// comparison with a pixel of tolerance (fractional display scales)
+(function toleranceTests() {
+  const w = 8, h = 1;
+  const gray = (vals, alphas) => {
+    const a = new Uint8ClampedArray(w * 4);
+    for (let x = 0; x < w; x++) { a[x * 4] = a[x * 4 + 1] = a[x * 4 + 2] = vals[x]; a[x * 4 + 3] = alphas ? alphas[x] : 255; }
+    return a;
+  };
+  const design = gray([0, 0, 0, 0, 255, 255, 255, 255]);          // an edge at x = 4
+  const edgeAt = (n) => gray(Array.from({ length: w }, (_, x) => (x < n ? 0 : 255)));
+  const diff = (page, d, r) => { const c = D.PE_diffCompare(page, d, w, h, 16, r); return [c.different, Array.from(c.mask).join('')]; };
+
+  check('tolerance: radius 0 (and no radius at all) is the exact comparison',
+    [diff(edgeAt(5), design, 0), diff(edgeAt(5), design, undefined)], [[1, '00001000'], [1, '00001000']]);
+  check('tolerance: an edge one pixel off is forgiven at radius 1', diff(edgeAt(5), design, 1), [0, '00000000']);
+  check('tolerance: a shift of three pixels is not hidden; only the pixel next to the right value is forgiven',
+    [diff(edgeAt(7), design, 0)[0], diff(edgeAt(7), design, 1)], [3, [2, '00000110']]);
+  check('tolerance: a flat area that is simply the wrong colour is still different',
+    D.PE_diffCompare(gray(Array(w).fill(100)), gray(Array(w).fill(200)), w, h, 16, 1).different, 8);
+
+  // The pixel that would match is one the design does not cover: it must not be used.
+  const holes = gray([255, 255, 255, 0, 255, 255, 255, 255], [255, 255, 255, 0, 255, 255, 255, 255]);
+  const zeros = gray(Array(w).fill(0));
+  const noHole = D.PE_diffCompare(zeros, holes, w, h, 16, 1);
+  check('tolerance: design pixels that are not covered are not used as a match', [noHole.compared, noHole.different], [7, 7]);
+  const covered = gray([255, 255, 255, 0, 255, 255, 255, 255]);
+  const withHole = D.PE_diffCompare(zeros, covered, w, h, 16, 1);
+  check('tolerance: the same pixel, covered, forgives its two neighbours (and matches itself)',
+    [withHole.compared, withHole.different, Array.from(withHole.mask).join('')], [8, 5, '11000111']);
+  check('tolerance: near-matching stays inside the image',
+    [D.PE_diffNearMatch(zeros, design, w, h, 0, 0, 1, 16), D.PE_diffNearMatch(zeros, design, w, h, 7, 0, 1, 16)], [true, false]);
+})();
+
 // regions
 (function regionTests() {
   const w = 64, h = 32;
@@ -889,6 +924,19 @@ check('a failed storage write (quota) must not be treated as a lost extension',
   (contentJs.match(/if \(!isContextAlive\(\)\) noteContextLost\(\);/g) || []).length, 3);
 check('Compare keeps every extension overlay out of the capture: layers, toolbar, toast container and Clippy are hidden',
   [diffJs.includes('[layer, heat, divider, toolbar, '), diffJs.includes("getElementById('pe-toast-container')"), diffJs.includes("getElementById('pe-clippy-buddy')")], [true, true, true]);
+(function untrustedInputTests() {
+  // Events a page script dispatches itself (isTrusted === false) must not drive the modes.
+  const page = freshPage(); const calls = [];
+  const mm = new PE_ModeManager().register('m', { enter() {}, exit() {}, onClick: (e) => calls.push('click'), onModifier: () => calls.push('mod'), onPointerMove: () => calls.push('move') });
+  mm.activate('m');
+  page.win.fire('click', { isTrusted: false }); page.win.fire('keydown', { isTrusted: false }); page.doc.fire('mousemove', { isTrusted: false, target: {}, clientX: 1, clientY: 1 }); flushFrames();
+  const forged = calls.slice();
+  page.win.fire('click', { isTrusted: true }); page.win.fire('keydown', { isTrusted: true }); page.doc.fire('mousemove', { isTrusted: true, target: {}, clientX: 1, clientY: 1 }); flushFrames();
+  check('mode manager: page-made click/keydown/mousemove (isTrusted false) never reach the mode; real ones do', [forged, calls.slice(forged.length).sort()], [[], ['click', 'mod', 'move']]);
+  mm.deactivate();
+})();
+check('shortcuts (incl. Ctrl+Z and Alt+Shift+D, which deletes the site\'s rules) and the Diff paste/drop ignore isTrusted === false events',
+  [/document\.addEventListener\('keydown', \(e\) => \{\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*if \(e\.isTrusted === false\) return;/.test(contentJs), /function onPaste\(e\) \{\s*if \(e\.isTrusted === false\) return;/.test(diffJs), /e\.isTrusted === false \|\| !overDrop\(e\)/.test(diffJs)], [true, true, true]);
 check('Compare takes the design and the heat map out of layout (display:none) for the capture, not just visibility:hidden, and puts their display back afterwards',
   [diffJs.includes('const inLayout = [layer, heat];'), diffJs.includes("n.style.setProperty('display', 'none', 'important')"),
    diffJs.includes("n.style.removeProperty('display');"), diffJs.includes('if (displays[i]) n.style.display = displays[i];')], [true, true, true, true]);
@@ -911,12 +959,90 @@ check('paste, drag-over and drop are listened for on window in the capture phase
   check('no two content-script files declare the same top-level name', dupes, []);
 })();
 
+/* ─── Review fixes: tolerance wiring, synthetic clicks, popup notice ─── */
+console.log('release-candidate fixes');
+(function rcFixTests() {
+  check('Compare snaps the design to device pixels, forgives 1 px only when the scale is fractional, and says so',
+    [diffJs.includes('Number.isInteger(sx) && Number.isInteger(sy) ? 0 : 1'),
+     diffJs.includes('Math.round(rect.left * sx)'), diffJs.includes('Math.round((rect.left + rect.width) * sx) - dx'),
+     diffJs.includes('designCtx.drawImage(image.bitmap, dx, dy, dw, dh)'),
+     diffJs.includes('settings.threshold, radius)'),
+     (diffJs.match(/tolerance: '/g) || []).length, diffJs.includes('${summary} · ${t.tolerance}')],
+    [true, true, true, true, true, 2, true]);
+  check('Compare, Clear, Remove image and X-Ray Capture ignore clicks the page made up',
+    [/ui\.compare\.addEventListener\('click', \(e\) => \{ if \(e\.isTrusted !== false\) compare\(\); \}\)/.test(diffJs),
+     /ui\.clear\.addEventListener\('click', \(e\) => \{ if \(e\.isTrusted !== false\) clearHeat\(false\); \}\)/.test(diffJs),
+     /ui\.remove\.addEventListener\('click', \(e\) => \{ if \(e\.isTrusted !== false\) removeImage\(\); \}\)/.test(diffJs),
+     /captureBtn\.addEventListener\('click', \(e\) => \{ if \(e\.isTrusted !== false\) capture\(\); \}\)/.test(xrayJs)],
+    [true, true, true, true]);
+
+  // content script: listening starts before the first storage round trip
+  const initBody = ((/async _init\(\) \{([\s\S]*?)\n    \}\n/.exec(contentJs.replace(/\r/g, '')) || [])[1] || '')
+    .split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  const firstAwait = initBody.indexOf('await ');
+  check('content.js _init registers the message and shortcut listeners before its first await, once each',
+    [initBody.length > 200, firstAwait > 0,
+     initBody.indexOf('this._setupMessageListener()') >= 0 && initBody.indexOf('this._setupMessageListener()') < firstAwait,
+     initBody.indexOf('this._setupKeyListeners()') >= 0 && initBody.indexOf('this._setupKeyListeners()') < firstAwait,
+     (contentJs.match(/this\._setupMessageListener\(\)/g) || []).length, (contentJs.match(/this\._setupKeyListeners\(\)/g) || []).length],
+    [true, true, true, true, 1, 1]);
+  check('no shipped document links the repository name that returns 404; README and policy link the real one',
+    [['README.md', 'privacy-policy.html', 'popup.html', 'CHANGELOG.md', 'docs/ARCHITECTURE.md'].filter((f) => /github\.com\/rildir\/PageEraser/i.test(read(f))),
+     /github\.com\/rildir\/resize-extension\/issues/.test(read('privacy-policy.html')), /github\.com\/rildir\/resize-extension\/actions\/workflows\/ci\.yml/.test(read('README.md'))],
+    [[], true, true]);
+
+  // popup: a tab nothing answers on
+  const popupSrc = read('popup.js').replace(/\r/g, '');
+  const popupHtmlSrc = read('popup.html');
+  const popupStyle = read('popup.css');
+  check('popup.html has the notice element, hidden until needed and announced to screen readers; both languages have the text',
+    [/<div class="reach-notice" id="reach-notice" role="alert" hidden><\/div>/.test(popupHtmlSrc), enKeys.has('reachNotice'), trKeys.has('reachNotice'),
+     /\.reach-notice\[hidden\]\s*\{\s*display:\s*none/.test(popupStyle), /theme-high-contrast \.reach-notice/.test(popupStyle)],
+    [true, true, true, true, true]);
+  check('the popup lists every global shortcut the content script handles, and the policy page keeps its tables inside a narrow window',
+    [['E', 'D', 'W', 'X', 'C', 'V'].filter((k) => !popupHtmlSrc.includes(`<span class="key-label">Alt+Shift+${k}</span>`)),
+     /table\s*\{[^}]*table-layout:\s*fixed/.test(read('privacy-policy.html')), /th,\s*td\s*\{[^}]*overflow-wrap:\s*anywhere/.test(read('privacy-policy.html'))],
+    [[], true, true]);
+  check('every mode launcher goes through launchOnTab; none of them sends its start message directly any more',
+    [(popupSrc.match(/await launchOnTab\(\{/g) || []).length,
+     (popupSrc.match(/sendMessageToTab\(\{ type: '(?:START_SELECTION|START_PAINT|TOGGLE_XRAY|TOGGLE_EXTRACT|TOGGLE_DIFF)'/g) || []).length],
+    [6, 0]);
+  const grab = (name) => {
+    const m = new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}\\n`).exec(popupSrc);
+    return m ? m[0] : '';
+  };
+  const tabChange = grab('handleActiveTabChange');
+  check('the popup treats the Web Store pages as unreachable and clears the notice when the tab changes',
+    [tabChange.includes('&& !isRestrictedPage(urlObj)'), tabChange.includes('hideReachNotice();'), tabChange.length > 200], [true, true, true]);
+  const isRestricted = new Function(`${grab('isRestrictedPage')}\nreturn isRestrictedPage;`)();
+  check('isRestrictedPage: the Chrome Web Store (both hosts) and Edge Add-ons, nothing that merely looks like them',
+    ['https://chromewebstore.google.com/detail/x/abc', 'https://chrome.google.com/webstore/detail/x', 'https://microsoftedge.microsoft.com/addons/detail/x',
+     'https://chrome.google.com/', 'https://example.com/webstore', 'https://notchromewebstore.google.com/', 'https://microsoftedge.microsoft.com/']
+      .map((u) => isRestricted(new URL(u))),
+    [true, true, true, false, false, false, false]);
+
+  const launch = async (answer) => {
+    const log = [];
+    const fn = new Function('sendMessageToTab', 'showReachNotice', 'hideReachNotice', 'window', `${grab('launchOnTab')}\nreturn launchOnTab;`)(
+      async () => answer, () => log.push('notice'), () => log.push('clear'), { close: () => log.push('close') });
+    return [await fn({ type: 'TOGGLE_DIFF' }), log];
+  };
+  pending.push((async () => {
+    check('launchOnTab: nothing answered -> the notice is shown and the popup stays open',
+      await launch(null), [false, ['notice']]);
+    check('launchOnTab: the page answered -> notice cleared, popup closes',
+      await launch({ success: true }), [true, ['clear', 'close']]);
+  })());
+})();
+
 /* ─── Result ─────────────────────────────────────────────── */
-console.log('');
-if (failures === 0) {
-  console.log(`All ${checks} checks passed.`);
-  process.exit(0);
-} else {
-  console.log(`${failures} of ${checks} checks FAILED.`);
-  process.exit(1);
-}
+Promise.all(pending).then(() => {
+  console.log('');
+  if (failures === 0) {
+    console.log(`All ${checks} checks passed.`);
+    process.exit(0);
+  } else {
+    console.log(`${failures} of ${checks} checks FAILED.`);
+    process.exit(1);
+  }
+});

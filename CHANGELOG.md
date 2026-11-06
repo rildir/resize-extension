@@ -42,6 +42,13 @@ this project uses [Semantic Versioning](https://semver.org/).
   extension's UI from the page and silently disabled it until reload. It now only
   does that when the context really is gone. This matters more with images in
   storage, but it affected saving rules too.
+- **A page could drive the extension with events it dispatches itself.** The
+  in-page shortcuts, the modes' click/modifier/mouse-move handlers and Visual
+  Diff's paste and drop all accepted `isTrusted === false` events, so a page
+  script could start a mode, erase an element and save a rule, undo it, or send
+  `Alt+Shift+D` and delete the user's saved rules for that site — and by repeating
+  that, fill the shared storage quota. They now ignore events the page made up;
+  real keyboard, mouse, paste and drop input is unchanged.
 - Compare could report phantom differences: the "Visual Diff Active" toast (and
   Clippy, when enabled) was still on screen when the tab was captured, so a
   comparison started within a few seconds of opening the mode counted the toast's
@@ -60,6 +67,41 @@ this project uses [Semantic Versioning](https://semver.org/).
   taken out of layout (`display: none`) for the capture, so the page is compared
   as it is without the overlay.
 
+- The popup closed without a word when nothing on the tab could answer — tabs
+  that were already open when the extension was installed or updated (Chrome adds
+  no content script to them), and the Chrome Web Store, where extensions do not
+  run — so the buttons looked dead. It now stays open, says to reload the page, and
+  treats the Web Store and Edge Add-ons as restricted pages like `chrome://`.
+- Compare could report differences on an identical page at fractional display
+  scales (about 2 % at 125 %, 4 % at 150 %) and where a capture was a pixel off
+  the window size. The design is now placed with its edges snapped to device pixels
+  the way the browser paints them, and ±1 px is forgiven when the capture is not a
+  whole multiple of the layout; the result then ends with "±1 px tolerance".
+- A page could click the toolbar's Compare, Clear and Remove image buttons and
+  X-Ray's Capture with `element.click()`. They now ignore clicks the page made up.
+- The popup's shortcut list left out `Alt+Shift+W` (Paintbrush), and the privacy
+  policy's tables were wider than a 375 px window, so the page scrolled sideways.
+  Both fixed.
+- The content script began listening for popup messages and keyboard shortcuts only
+  after a storage round trip. On very large pages that opened a window, up to about a
+  second in some runs, in which the page was still loading and nothing was listening.
+  Both listeners are now registered first.
+- The README (CI badge, clone command, project tree) and the privacy policy (source
+  and issue links) pointed at a repository name that returns 404. They now point at
+  `rildir/resize-extension`.
+
+### Changed
+
+- The privacy policy matches what the extension does now: it lists the Visual Diff
+  settings and image kept on the device, the toolbar badge count in session storage,
+  what each tool reads from a page (X-Ray's Capture PNG, Extract's clipboard copy,
+  Compare's in-memory screenshot), and the one-time move from `storage.sync` to local
+  storage. It no longer says the data sits in an "encrypted profile directory" — the
+  extension does not encrypt it — and it notes that Visual Diff's image is drawn on
+  the page while the mode is active.
+- The keyboard shortcut table in the README lists the real keys (`Alt+Shift+E`, `D`,
+  `W`, `X`, `C`, `V`) and which of them work without the page in focus.
+
 ### Known limitations
 
 - Compare needs the extension to have been invoked on the tab (toolbar button,
@@ -74,6 +116,18 @@ this project uses [Semantic Versioning](https://semver.org/).
   while the mode is open (it is left out of the picture when comparing).
 - Four commands already hold a default key, which is Chrome's limit, so this one
   (like Extract to Code) has none until you assign it.
+- Recent Chrome versions (seen on 140 and 153) leave `Alt+Shift+W` and `Alt+Shift+X`
+  unassigned when the extension is installed, although the manifest suggests them
+  (older ones assign them). They work while the page has focus either way; for a
+  browser-wide key assign them at `chrome://extensions/shortcuts`. The README says so.
+- Even with that tolerance, a text-heavy page can still show a little noise at a
+  fractional scale when the design is a screenshot of the page itself (measured about
+  0.6 % at 125 %, 2.3 % at 150 %; flat content reports no difference). The design's
+  scale is a whole percent, and 150 % would need 66.67 %.
+- At a fractional display scale (125 %, 150 %) Compare allows ±1 px: the browser
+  snaps boxes to whole device pixels and the design is resampled onto that grid, so
+  a one-pixel misalignment cannot be told from rounding there. At 100 % and 200 %
+  the comparison is exact.
 
 ## [1.9.0] — 2026-11-04
 

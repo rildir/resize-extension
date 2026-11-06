@@ -281,6 +281,14 @@
 
     async _init() {
       try {
+        // Answer the popup and the keyboard shortcuts right away. Registering them
+        // after the first storage round trip left a window in which the page was
+        // still loading and nothing here was listening yet. The one cost of going
+        // first: a toast in those first milliseconds uses the browser's language
+        // (set in the constructor) instead of the one saved in the popup.
+        this._setupMessageListener();
+        this._setupKeyListeners();
+
         // Load initial dynamic language setting
         const langData = await storage.get('pe_lang');
         if (langData && langData.pe_lang) {
@@ -300,8 +308,6 @@
           });
         }
 
-        this._setupMessageListener();
-        this._setupKeyListeners();
         // Load and apply hidden elements immediately (runs at document_start)
         await this._loadAndApplyErasedElements();
       } catch (err) {
@@ -1070,6 +1076,9 @@
 
     _setupKeyListeners() {
       document.addEventListener('keydown', (e) => {
+        // Shortcuts, Ctrl+Z and Alt+Shift+D (which deletes the site's rules) come from the
+        // user's keyboard only: a page script can dispatch its own keydown events.
+        if (e.isTrusted === false) return;
         const activeEl = document.activeElement;
         if (activeEl && (
           activeEl.tagName === 'INPUT' || 

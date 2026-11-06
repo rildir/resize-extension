@@ -182,6 +182,9 @@
           <div class="field-value-sunken" id="domain-name">Loading...</div>
         </div>
 
+        <!-- Shown when nothing on the tab answers (opened before install/update) -->
+        <div class="reach-notice" id="reach-notice" role="alert" hidden></div>
+
         <!-- Action Select Trigger & Persist Checkbox -->
         <div style="display: flex; gap: 8px; align-items: center; width: 100%">
           <button
@@ -366,6 +369,10 @@
             <span class="key-desc" data-i18n="restoreLayout"
               >Restore All Layout</span
             >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Alt+Shift+W</span>
+            <span class="key-desc" data-i18n="paintWebpage">Paint Webpage</span>
           </div>
           <div class="shortcut-row">
             <span class="key-label">Alt+Shift+X</span>

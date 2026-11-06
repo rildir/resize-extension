@@ -57,6 +57,7 @@ function PE_createDiffMode(host) {
         local: 'Görseliniz yalnızca bu bilgisayarda kalır.',
         loading: 'Yükleniyor…', comparing: 'Karşılaştırılıyor…',
         different: (p, r) => `%${p} farklı · ${r} bölge`,
+        tolerance: '±1 px tolerans',
         identical: 'Eşiğin üstünde fark yok.',
         outOfView: 'Tasarım görünür alanda değil: kaydırın veya görseli sayfanın görünen kısmına taşıyın.',
         needGesture: 'Karşılaştırma için PageEraser\'ı araç çubuğu düğmesi, kısayol veya sağ tık menüsünden başlatın.',
@@ -77,6 +78,7 @@ function PE_createDiffMode(host) {
         local: 'Your image stays on this computer.',
         loading: 'Loading…', comparing: 'Comparing…',
         different: (p, r) => `${p}% different · ${r} region${r === 1 ? '' : 's'}`,
+        tolerance: '±1 px tolerance',
         identical: 'No differences above the threshold.',
         outOfView: 'The design is not in view: scroll, or move it onto the visible part of the page.',
         needGesture: 'To compare, start PageEraser from the toolbar button, a shortcut or the right-click menu.',
@@ -363,8 +365,14 @@ function PE_createDiffMode(host) {
       if (session !== mine) { bitmap.close(); return; }
       const W = bitmap.width;
       const H = bitmap.height;
+      // Device pixels per CSS pixel in this capture. A whole number (100 %,
+      // 200 %) lines the page and the design up exactly. At 125 % or 150 % — or
+      // when the capture is a pixel off the window size — the browser rounds
+      // every box to whole device pixels and the design, resampled onto the same
+      // grid, can sit a pixel off along its edges: allow ±1 px there, and say so.
       const sx = W / innerW;
       const sy = H / innerH;
+      const radius = Number.isInteger(sx) && Number.isInteger(sy) ? 0 : 1;
 
       // Page and design on one pixel grid: the captured viewport, and the
       // design drawn where the overlay sits, at the overlay's size.
@@ -381,10 +389,16 @@ function PE_createDiffMode(host) {
       designCanvas.height = H;
       const designCtx = designCanvas.getContext('2d', { willReadFrequently: true });
       designCtx.imageSmoothingQuality = 'high';
-      designCtx.drawImage(image.bitmap, rect.left * sx, rect.top * sy, rect.width * sx, rect.height * sy);
+      // The browser snaps a box's edges to whole device pixels when it paints
+      // it; place the design the same way.
+      const dx = Math.round(rect.left * sx);
+      const dy = Math.round(rect.top * sy);
+      const dw = Math.round((rect.left + rect.width) * sx) - dx;
+      const dh = Math.round((rect.top + rect.height) * sy) - dy;
+      designCtx.drawImage(image.bitmap, dx, dy, dw, dh);
       const designData = designCtx.getImageData(0, 0, W, H).data;
 
-      const cmp = PE_diffCompare(pageData, designData, W, H, settings.threshold);
+      const cmp = PE_diffCompare(pageData, designData, W, H, settings.threshold, radius);
       if (cmp.compared === 0) { setResult(t.outOfView); return; }
       const regions = PE_diffRegions(cmp.mask, W, H);
 
@@ -397,7 +411,8 @@ function PE_createDiffMode(host) {
       schedule();
 
       const pct = cmp.percent > 0 && cmp.percent < 0.05 ? '<0.1' : cmp.percent.toFixed(1);
-      setResult(cmp.different === 0 ? t.identical : t.different(pct, regions.count));
+      const summary = cmp.different === 0 ? t.identical : t.different(pct, regions.count);
+      setResult(radius > 0 ? `${summary} · ${t.tolerance}` : summary);
     } catch (err) {
       if (session === mine) setResult(`${t.failed}: ${(err && err.message) || err}`);
     }
@@ -477,9 +492,10 @@ function PE_createDiffMode(host) {
     ui.blend.addEventListener('change', () => changed({ blend: ui.blend.checked }));
     ui.split.addEventListener('change', () => changed({ split: ui.split.checked }));
     ui.threshold.addEventListener('input', () => changed({ threshold: ui.threshold.value }));
-    ui.compare.addEventListener('click', compare);
-    ui.clear.addEventListener('click', () => clearHeat(false));
-    ui.remove.addEventListener('click', removeImage);
+    // A page can click our buttons with element.click(); only real clicks count.
+    ui.compare.addEventListener('click', (e) => { if (e.isTrusted !== false) compare(); });
+    ui.clear.addEventListener('click', (e) => { if (e.isTrusted !== false) clearHeat(false); });
+    ui.remove.addEventListener('click', (e) => { if (e.isTrusted !== false) removeImage(); });
 
     // Choose, drop, paste
     ui.drop.addEventListener('click', () => ui.file.click());
@@ -503,7 +519,7 @@ function PE_createDiffMode(host) {
       if (overDrop(e)) ui.drop.classList.remove('pe-over');
     }, true);
     listen(window, 'drop', (e) => {
-      if (!overDrop(e)) return;
+      if (e.isTrusted === false || !overDrop(e)) return;
       e.preventDefault();
       ui.drop.classList.remove('pe-over');
       const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
@@ -518,6 +534,7 @@ function PE_createDiffMode(host) {
   }
 
   function onPaste(e) {
+    if (e.isTrusted === false) return; // a page cannot hand the extension an image
     const files = e.clipboardData && e.clipboardData.files;
     if (!files || !files.length) return;
     const f = Array.from(files).find((x) => /^image\//.test(x.type));

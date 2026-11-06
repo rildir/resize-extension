@@ -8,7 +8,7 @@
 
 **Interactively select and permanently remove any element from any webpage.**
 
-[![CI](https://github.com/rildir/PageEraser/actions/workflows/ci.yml/badge.svg)](https://github.com/rildir/PageEraser/actions/workflows/ci.yml)
+[![CI](https://github.com/rildir/resize-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/rildir/resize-extension/actions/workflows/ci.yml)
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
@@ -162,7 +162,7 @@ Full bilingual support with dynamic locale switching:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/rildir/PageEraser.git
+   git clone https://github.com/rildir/resize-extension.git
    ```
 
 2. **Open your browser's extension page**
@@ -216,13 +216,20 @@ Right-click any element on a page to access:
 ### Global Shortcuts
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+Shift+E` | Toggle Selection Mode |
-| `Ctrl+Shift+Y` | Restore All Layout |
-| `Ctrl+Shift+K` | Start Paintbrush 95 |
+| `Alt+Shift+E` | Toggle Selection Mode (`Ctrl+Shift+E` also works while the page has focus) |
+| `Alt+Shift+D` | Restore All Layout on this site (`Ctrl+Shift+Y` also works while the page has focus) |
+| `Alt+Shift+W` | Start Paintbrush 95 (`Ctrl+Shift+K` also works while the page has focus) |
 | `Alt+Shift+X` | Toggle Layout X-Ray (`Ctrl+Shift+X` also works while the page has focus) |
 | `Alt+Shift+V` | Toggle Visual Diff (works while the page has focus; no default browser-wide key, assign one at `chrome://extensions/shortcuts`) |
 | `Alt+Shift+C` | Toggle Extract to Code (works while the page has focus; for a browser-wide key assign one at `chrome://extensions/shortcuts` — Chrome allows only four default shortcuts per extension and they are taken) |
 | `Ctrl+Z` | Undo last erased element (on page) |
+
+**Browser-wide keys.** `E`, `D`, `W` and `X` are registered with Chrome, so they work
+from anywhere in the browser. Some recent Chrome versions (seen on 140 and 153; not on
+102, 114 or 125) leave `Alt+Shift+W` and `Alt+Shift+X` unassigned when an extension is
+installed. If one does nothing while the page is not in focus, assign it at
+`chrome://extensions/shortcuts`. With the page in focus every shortcut above works
+regardless, because the extension also listens for them itself (not inside text fields).
 
 ### In Selection Mode
 | Key | Action |
@@ -254,7 +261,7 @@ Right-click any element on a page to access:
 ## 📁 Project Structure
 
 ```
-PageEraser/
+resize-extension/
 ├── manifest.json          # Extension manifest (V3)
 ├── background.js          # Service worker — commands, context menus, badges
 ├── content.js             # Content script — selection, erasing, DOM navigation
@@ -303,7 +310,7 @@ Contributions are welcome! Here's how to get started:
 
 ```bash
 # Clone the repo
-git clone https://github.com/rildir/PageEraser.git
+git clone https://github.com/rildir/resize-extension.git
 
 # Load as unpacked extension in Chrome
 # No build step needed for development — edit and reload!

@@ -130,8 +130,13 @@
 
         table {
             width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
             margin: 16px 0;
+        }
+
+        th, td {
+            overflow-wrap: anywhere;
         }
 
         th, td {
@@ -212,14 +217,16 @@
 </div>
 
 <div class="container">
-    <p class="effective-date">Effective Date: July 16, 2026 &nbsp;|&nbsp; Last Updated: July 16, 2026</p>
+    <p class="effective-date">Effective Date: July 16, 2026 &nbsp;|&nbsp; Last Updated: November 5, 2026</p>
 
     <h2>1. Introduction</h2>
     <p>
         This Privacy Policy describes how PageEraser ("the Extension", "we", "our") handles user data.
-        PageEraser is a Chrome/Edge browser extension that allows users to interactively select and
-        remove HTML elements from web pages. We are committed to protecting your privacy and being
-        transparent about our data practices.
+        PageEraser is a Chrome/Edge browser extension for working with the pages you visit: it lets
+        you erase and stretch elements, look at a page's layout (Layout X-Ray), copy an element's
+        HTML and CSS (Extract to Code), compare a page against a design image (Visual Diff) and
+        paint on a page. We are committed to protecting your privacy and being transparent about our
+        data practices.
     </p>
 
     <div class="no-data-box">
@@ -236,40 +243,58 @@
         <li>No browsing history or activity is tracked</li>
         <li>No analytics or telemetry data is gathered</li>
         <li>No cookies are set by the extension</li>
-        <li>No data is transmitted to any external server</li>
+        <li>No account or sign-in; nothing identifies you</li>
+        <li>No data is transmitted to any external server: the extension makes no network requests of its own</li>
         <li>No third-party tracking scripts are used</li>
         <li>No advertising networks are integrated</li>
     </ul>
 
     <h2>3. Local Data Storage</h2>
     <p>
-        PageEraser stores the following data <strong>locally on your device</strong> using the
-        Chrome Storage API (<code>chrome.storage.local</code>):
+        PageEraser stores the following data <strong>locally on your device</strong> in the browser's
+        extension storage (<code>chrome.storage.local</code>). It exists only because a feature needs
+        it, and you can see, export or delete it at any time (see section 9).
     </p>
 
     <table>
         <thead>
             <tr>
                 <th>Data Type</th>
+                <th>What it contains</th>
                 <th>Purpose</th>
-                <th>Storage Location</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td>CSS selectors of removed elements</td>
-                <td>Persist element removal rules across page reloads</td>
-                <td>Local device only</td>
+                <td>Erase and stretch rules</td>
+                <td>For each site you use PageEraser on: the site's domain name, and for each element
+                    the CSS selector that finds it, whether it is hidden or stretched, and whether you
+                    deleted it for good from the Recycle Bin. No page text and no page content.</td>
+                <td>Apply your rules again when the page reloads</td>
             </tr>
             <tr>
-                <td>Extension preferences</td>
-                <td>Store user settings (theme, language, sound on/off)</td>
-                <td>Local device only</td>
+                <td>Preferences</td>
+                <td>Language, theme, contrast, text size, sound on/off, Clippy on/off, whether the
+                    intro tour was completed, whether rules apply to all subdomains or persist, and
+                    the X-Ray depth</td>
+                <td>Remember how you set the extension up</td>
             </tr>
             <tr>
-                <td>Domain-scoped rules</td>
-                <td>Associate removal rules with specific websites</td>
-                <td>Local device only</td>
+                <td>Visual Diff settings</td>
+                <td>Per site: the design's position, scale, opacity, display mode and comparison
+                    threshold</td>
+                <td>Put the overlay back where you left it</td>
+            </tr>
+            <tr>
+                <td>Visual Diff image</td>
+                <td>The design image you loaded for a site, stored as it was loaded when it fits in 5 MB.
+                    A larger image (up to 25 MB) is shown for that visit only and not stored.</td>
+                <td>Show your design again on that site; <em>Remove image</em> deletes it</td>
+            </tr>
+            <tr>
+                <td>Toolbar badge count</td>
+                <td>The number of hidden elements per open tab, in <code>chrome.storage.session</code></td>
+                <td>Show the count on the toolbar icon; cleared when the browser closes</td>
             </tr>
         </tbody>
     </table>
@@ -280,7 +305,28 @@
         after installation.
     </div>
 
-    <h2>4. Permissions Explanation</h2>
+    <p>
+        Earlier versions kept the same data in <code>chrome.storage.sync</code>, which Chrome can
+        sync through your Google account when you have browser sync turned on. The current version
+        moves anything it finds there to local storage once, then clears it from sync, so new data
+        is never synced by the extension.
+    </p>
+
+    <h2>4. What PageEraser Reads From Pages</h2>
+    <p>
+        The extension's content script runs on the pages you visit so that your saved rules can be
+        applied as soon as a page loads and so that its tools are ready when you start them. It
+        reads a page only to do what you asked, and it does not keep or send what it reads:
+    </p>
+    <ul>
+        <li><strong>Erase / Stretch:</strong> looks at the element you pick to build a selector for it. Only the selector is saved.</li>
+        <li><strong>Layout X-Ray:</strong> measures element sizes and positions and draws them over the page. Nothing is saved. <em>Capture</em> takes an image of the visible part of the tab, adds the overlay and saves it as a PNG through the browser's normal download, according to your download settings. The extension does not keep a copy.</li>
+        <li><strong>Extract to Code:</strong> reads the HTML and computed styles of the element you pick and shows them in a panel on the page. It is copied to your clipboard only when you press a copy button. Nothing is saved, and font files are listed, never downloaded.</li>
+        <li><strong>Visual Diff:</strong> shows the image you load (from a file, a paste or a drag-and-drop) over the page. <em>Compare</em> takes an image of the visible tab, compares its pixels with your design in memory and discards it. The design image is not sent anywhere. While the mode is active the image is drawn on the page you are viewing, so, like anything shown on a page, a script of that page could in principle read it: do not load a confidential design on a page you do not trust.</li>
+        <li><strong>Paintbrush:</strong> draws on the page you are viewing. Nothing is saved.</li>
+    </ul>
+
+    <h2>5. Permissions Explanation</h2>
     <p>
         The extension requires certain browser permissions to function. Here is a transparent
         explanation of each permission and why it is needed:
@@ -296,11 +342,11 @@
         <tbody>
             <tr>
                 <td class="permission-name">storage</td>
-                <td>To save your element removal rules and preferences locally on your device</td>
+                <td>To save your rules, preferences and Visual Diff settings and image locally on your device</td>
             </tr>
             <tr>
                 <td class="permission-name">activeTab</td>
-                <td>To interact with the current page when you activate element selection mode</td>
+                <td>To work with the current tab when you start a tool from the toolbar button, a keyboard shortcut or the right-click menu, including taking an image of the visible tab when you press <em>Capture</em> (X-Ray) or <em>Compare</em> (Visual Diff). It gives access to the tab only after you invoke the extension on it.</td>
             </tr>
             <tr>
                 <td class="permission-name">contextMenus</td>
@@ -308,71 +354,80 @@
             </tr>
             <tr>
                 <td class="permission-name">&lt;all_urls&gt;</td>
-                <td>To inject content scripts on any webpage so element removal works on all sites you visit</td>
+                <td>To run the content script on any webpage so your saved rules apply on every site you have used PageEraser on, as soon as the page loads</td>
             </tr>
         </tbody>
     </table>
+    <p>
+        PageEraser does <strong>not</strong> request the <code>tabs</code>, <code>history</code>,
+        <code>cookies</code>, <code>downloads</code>, <code>clipboardRead</code>,
+        <code>webRequest</code> or <code>identity</code> permissions, and it never reads your
+        browsing history.
+    </p>
 
-    <h2>5. Third-Party Services</h2>
+    <h2>6. Third-Party Services</h2>
     <p>
         PageEraser does <strong>not</strong> use any third-party services, APIs, analytics platforms,
         or advertising networks. The extension is completely self-contained and operates entirely
         within your browser.
     </p>
 
-    <h2>6. Data Sharing</h2>
+    <h2>7. Data Sharing</h2>
     <p>
         We do not sell, trade, rent, or otherwise share any user data with third parties. Since no
         data is collected, there is nothing to share.
     </p>
 
-    <h2>7. Data Security</h2>
+    <h2>8. Data Security</h2>
     <p>
-        All data stored by PageEraser is protected by Chrome's built-in extension security model.
-        Data stored via <code>chrome.storage.local</code> is:
+        All data stored by PageEraser stays in your browser profile on your device. The browser's
+        extension model keeps it:
     </p>
     <ul>
-        <li>Accessible only to the PageEraser extension</li>
-        <li>Isolated from other extensions and web pages</li>
-        <li>Stored in Chrome's encrypted profile directory</li>
-        <li>Automatically removed when the extension is uninstalled</li>
+        <li>Accessible only to the PageEraser extension: web pages and other extensions cannot read it</li>
+        <li>Removed automatically when the extension is uninstalled</li>
     </ul>
+    <p>
+        The extension does not encrypt this data itself. Anyone who can open your computer account or
+        browser profile can read it, as with any other data in your profile.
+    </p>
 
-    <h2>8. User Rights &amp; Data Deletion</h2>
+    <h2>9. User Rights &amp; Data Deletion</h2>
     <p>You have full control over your data at all times:</p>
     <ul>
         <li><strong>View your data:</strong> Open the PageEraser popup to see all stored rules for the current site</li>
         <li><strong>Delete specific rules:</strong> Use the "Restore" button next to any rule, or drag it to the Recycle Bin</li>
         <li><strong>Delete all rules for a site:</strong> Click "Restore All Layout" in the popup</li>
-        <li><strong>Export your data:</strong> Use File → Export Rules to save all rules as a JSON file</li>
+        <li><strong>Export and import your rules:</strong> Use File → Export Rules to save all rules as a JSON file, and File → Import Rules to load one. The file goes where you save it; nothing is uploaded</li>
+        <li><strong>Delete a Visual Diff image:</strong> Use <em>Remove image</em> in the Visual Diff toolbar</li>
         <li><strong>Delete all data:</strong> Uninstalling the extension automatically removes all stored data</li>
     </ul>
 
-    <h2>9. Children's Privacy</h2>
+    <h2>10. Children's Privacy</h2>
     <p>
         PageEraser does not knowingly collect any information from children under 13 years of age.
         The extension does not collect any personal information from any user regardless of age.
     </p>
 
-    <h2>10. Changes to This Policy</h2>
+    <h2>11. Changes to This Policy</h2>
     <p>
         We may update this Privacy Policy from time to time. Any changes will be reflected on this
         page with an updated "Last Updated" date. We encourage you to review this policy periodically.
     </p>
 
-    <h2>11. Open Source</h2>
+    <h2>12. Open Source</h2>
     <p>
         PageEraser is open source software licensed under the MIT License. You can inspect the
         complete source code to verify our privacy claims:
     </p>
     <div class="highlight-box">
         <strong>GitHub Repository:</strong>
-        <a href="https://github.com/rildir/PageEraser" target="_blank" rel="noopener" style="color: #4dd4d4;">
-            https://github.com/rildir/PageEraser
+        <a href="https://github.com/rildir/resize-extension" target="_blank" rel="noopener" style="color: #4dd4d4;">
+            https://github.com/rildir/resize-extension
         </a>
     </div>
 
-    <h2>12. Contact</h2>
+    <h2>13. Contact</h2>
     <div class="contact-box">
         <h3>Developers</h3>
         <p>
@@ -394,9 +449,9 @@
 <footer>
     <p>© 2026 PageEraser. All rights reserved.</p>
     <p style="margin-top: 8px;">
-        <a href="https://github.com/rildir/PageEraser" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/rildir/resize-extension" target="_blank" rel="noopener">GitHub</a>
         &nbsp;·&nbsp;
-        <a href="https://github.com/rildir/PageEraser/issues" target="_blank" rel="noopener">Report an Issue</a>
+        <a href="https://github.com/rildir/resize-extension/issues" target="_blank" rel="noopener">Report an Issue</a>
     </p>
 </footer>
 

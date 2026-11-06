@@ -584,7 +584,8 @@ function PE_createXrayMode(host) {
       host._saveSetting('pe_xray_depth', depth);
       schedule();
     });
-    captureBtn.addEventListener('click', capture);
+    // A page can click our button with element.click(); only a real click captures.
+    captureBtn.addEventListener('click', (e) => { if (e.isTrusted !== false) capture(); });
     toolbar.querySelector('.pe-paint-toolbox-close').addEventListener('click', () => {
       host.modes.deactivate();
     });

@@ -117,6 +117,7 @@ class PE_ModeManager {
   _attach(id, mode) {
     if (typeof mode.onPointerMove === 'function') {
       this._listen(document, 'mousemove', (e) => {
+        if (e.isTrusted === false) return; // a page can dispatch its own events
         if (this._activeId !== id || this._ticking) return;
         this._ticking = true;
         const info = { target: e.target, altKey: e.altKey, clientX: e.clientX, clientY: e.clientY };
@@ -132,12 +133,14 @@ class PE_ModeManager {
 
     if (typeof mode.onClick === 'function') {
       this._listen(window, 'click', (e) => {
+        if (e.isTrusted === false) return; // a page-made click must not erase, pick or extract anything
         if (this._activeId === id) mode.onClick(e);
       }, true);
     }
 
     if (typeof mode.onModifier === 'function') {
       const onModifier = (e) => {
+        if (e.isTrusted === false) return;
         if (this._activeId === id) mode.onModifier(e);
       };
       this._listen(window, 'keydown', onModifier, true);

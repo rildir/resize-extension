@@ -1426,3 +1426,24 @@ body.text-large .tour-tooltip-body {
   margin: 6px 0;
 }
 
+
+/* Notice under the site field: the page did not answer (tab opened before the
+ * extension was installed or updated). Same yellow as Clippy's balloon. */
+.reach-notice {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border: 1px solid #800000;
+  background: #ffffe1;
+  color: #800000;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.reach-notice[hidden] { display: none; }
+
+.window.theme-high-contrast .reach-notice {
+  background: #000000;
+  color: #ffffff;
+  border-color: #ffffff;
+}
