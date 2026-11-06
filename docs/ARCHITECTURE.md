@@ -141,7 +141,7 @@ There are exactly two such sinks:
 And three sources of untrusted input:
 
 1. **The page itself** — element ids, class names and tag names read by the picker.
-2. **An imported backup file** — arbitrary JSON the user was handed by someone else.
+2. **An imported backup file or a pasted sharing code** — arbitrary JSON, or text that decodes to it, that the user was handed by someone else. A code (`PE_parseShare` in `shared.js`) gets the same selector checks as a backup, plus: a size cap (200,000 characters, 500 rules), strict UTF-8, a hostname check on the site it names, no selector that hides the whole page (`body`, `html`, `*`), every rule marked `imported`, and a preview with an explicit *Add rules* press before anything is stored. The code itself is plain text and makes no request.
 3. **The inline selector editor** — arbitrary text the user types.
 
 ### 3.2 CSS injection

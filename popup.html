@@ -52,6 +52,21 @@
               Import Rules...
             </div>
             <div class="dropdown-divider"></div>
+            <div
+              class="dropdown-item"
+              id="menu-item-copycode"
+              data-i18n="copyCodeMenu"
+            >
+              Copy Rules as Code
+            </div>
+            <div
+              class="dropdown-item"
+              id="menu-item-importcode"
+              data-i18n="importCodeMenu"
+            >
+              Import from Code...
+            </div>
+            <div class="dropdown-divider"></div>
             <div class="dropdown-item" id="menu-item-exit" data-i18n="exit">
               Exit
             </div>
@@ -518,6 +533,84 @@
           <div class="about-footer">
             <button class="win-btn win-btn-ok" id="btn-ok-about" type="button">
               <span data-i18n="okBtn">OK</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Dialog (Import from code): paste, see what it holds, then add -->
+    <div
+      class="win-modal-overlay"
+      id="code-overlay"
+      style="display: none; z-index: 10000"
+    >
+      <div
+        class="win-modal"
+        style="min-width: 250px; max-width: 300px"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="code-title"
+      >
+        <div class="title-bar">
+          <div
+            class="title-bar-text"
+            id="code-title"
+            data-i18n="codeDialogTitle"
+          >
+            Import from Code
+          </div>
+          <div class="title-bar-controls">
+            <button
+              aria-label="Close"
+              class="win-btn-control close-btn"
+              id="btn-close-code"
+              type="button"
+            ></button>
+          </div>
+        </div>
+        <div class="win-modal-body" style="padding: 12px">
+          <label class="code-label" for="code-input" data-i18n="codePaste"
+            >Paste a PageEraser code:</label
+          >
+          <textarea
+            class="win-input code-input"
+            id="code-input"
+            rows="3"
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            placeholder="pageeraser:1:..."
+          ></textarea>
+          <div
+            class="code-preview"
+            id="code-preview"
+            role="status"
+            aria-live="polite"
+          ></div>
+          <div class="code-note" data-i18n="codeSafeNote">
+            Rules from someone else only hide or stretch elements on that site.
+          </div>
+          <div
+            class="alert-footer"
+            style="display: flex; justify-content: center; gap: 8px"
+          >
+            <button
+              class="win-btn win-btn-ok"
+              id="btn-add-code"
+              type="button"
+              disabled
+              style="width: 96px"
+            >
+              <span data-i18n="codeAddBtn">Add rules</span>
+            </button>
+            <button
+              class="win-btn win-btn-ok"
+              id="btn-cancel-code"
+              type="button"
+              style="width: 80px"
+            >
+              <span data-i18n="cancelBtn">Cancel</span>
             </button>
           </div>
         </div>

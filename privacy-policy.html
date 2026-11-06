@@ -268,8 +268,9 @@
             <tr>
                 <td>Erase and stretch rules</td>
                 <td>For each site you use PageEraser on: the site's domain name, and for each element
-                    the CSS selector that finds it, whether it is hidden or stretched, and whether you
-                    deleted it for good from the Recycle Bin. No page text and no page content.</td>
+                    the CSS selector that finds it, whether it is hidden or stretched, whether you
+                    deleted it for good from the Recycle Bin, and whether it came from a code someone
+                    shared with you. No page text and no page content.</td>
                 <td>Apply your rules again when the page reloads</td>
             </tr>
             <tr>
@@ -324,6 +325,7 @@
         <li><strong>Extract to Code:</strong> reads the HTML and computed styles of the element you pick and shows them in a panel on the page. It is copied to your clipboard only when you press a copy button. Nothing is saved, and font files are listed, never downloaded.</li>
         <li><strong>Visual Diff:</strong> shows the image you load (from a file, a paste or a drag-and-drop) over the page. <em>Compare</em> takes an image of the visible tab, compares its pixels with your design in memory and discards it. The design image is not sent anywhere. While the mode is active the image is drawn on the page you are viewing, so, like anything shown on a page, a script of that page could in principle read it: do not load a confidential design on a page you do not trust.</li>
         <li><strong>Paintbrush:</strong> draws on the page you are viewing. Nothing is saved.</li>
+        <li><strong>Copy Rules as Code / Import from Code:</strong> <em>Copy</em> puts the current site's domain name and its rules' CSS selectors on your clipboard as one line of text, when you choose it. <em>Import</em> reads only the text you paste into its box, shows you what it holds, and adds it to your rules when you press <em>Add rules</em>. The extension does not read your clipboard on its own and sends the code nowhere: how it reaches another person is up to you.</li>
     </ul>
 
     <h2>5. Permissions Explanation</h2>

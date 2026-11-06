@@ -1447,3 +1447,85 @@ body.text-large .tour-tooltip-body {
   color: #ffffff;
   border-color: #ffffff;
 }
+
+/* ─── Rules from someone else's code ─────────────────────── */
+.imported-banner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 2px 4px;
+  background: #000080;
+  color: #ffffff;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.imported-banner-text {
+  flex: 1;
+  min-width: 0;
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selector-item.imported {
+  border-left: 3px solid #000080;
+}
+
+/* Import from Code dialog */
+.code-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.code-input {
+  display: block;
+  width: 100%;
+  height: 52px;
+  box-sizing: border-box;
+  resize: none;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.code-preview {
+  min-height: 44px;
+  max-height: 104px;
+  margin: 6px 0;
+  padding: 4px;
+  overflow-y: auto;
+  background: #ffffff;
+  color: #000000;
+  font-size: 11px;
+  border-top: 1px solid #808080;
+  border-left: 1px solid #808080;
+  border-right: 1px solid #ffffff;
+  border-bottom: 1px solid #ffffff;
+  box-shadow: inset 1px 1px 0 #000000, inset -1px -1px 0 #dfdfdf;
+}
+
+.code-hint { color: #808080; font-style: italic; }
+.code-error { color: #800000; }
+.code-summary { margin-bottom: 2px; font-weight: bold; word-break: break-all; }
+.code-more, .code-skipped { color: #808080; font-size: 10px; }
+.code-note { margin-bottom: 8px; color: #404040; font-size: 10px; line-height: 1.3; }
+
+.theme-high-contrast .imported-banner { background: #000000; color: #ffffff; border: 2px solid #ffffff; }
+.theme-high-contrast .selector-item.imported { border-left: 4px solid #000000; }
+.theme-high-contrast .code-preview { border: 2px solid #000000; box-shadow: none; }
+.theme-high-contrast .code-hint, .theme-high-contrast .code-more,
+.theme-high-contrast .code-skipped, .theme-high-contrast .code-note { color: #000000; }
+.theme-high-contrast .code-error { color: #000000; font-weight: bold; }
+
+body.text-large .reach-notice { font-size: 12px; }
+body.text-large .imported-banner,
+body.text-large .code-preview,
+body.text-large .code-label { font-size: 12px; }
+/* Large text makes every .win-btn big; the banner has to share one row with its label. */
+body.text-large .imported-banner .win-btn { padding: 1px 8px !important; font-size: 11px !important; }
+body.text-large .code-note,
+body.text-large .code-more,
+body.text-large .code-skipped { font-size: 11px; }

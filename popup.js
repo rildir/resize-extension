@@ -286,13 +286,18 @@
       return;
     }
 
-    filtered.forEach((itemData) => {
+    // Rules that came from someone else's code are listed last, under their own heading.
+    const isImportedRule = (rule) => !!rule && typeof rule === 'object' && rule.imported === true;
+    const ordered = [...filtered.filter((rule) => !isImportedRule(rule)), ...filtered.filter(isImportedRule)];
+    let importedHeadingShown = false;
+
+    ordered.forEach((itemData) => {
       const isString = typeof itemData === 'string';
       const selectorStr = isString ? itemData : itemData.selector;
       const action = isString ? 'hide' : itemData.action;
 
       const item = document.createElement('div');
-      item.className = 'selector-item';
+      item.className = isImportedRule(itemData) ? 'selector-item imported' : 'selector-item';
       item.draggable = true;
 
       item.addEventListener('dragstart', (e) => {
@@ -452,8 +457,72 @@
       item.appendChild(actionBadge);
       item.appendChild(text);
       item.appendChild(controlsContainer);
+      if (isImportedRule(itemData) && !importedHeadingShown) {
+        importedHeadingShown = true;
+        selectorsList.appendChild(buildImportedBanner());
+      }
       selectorsList.appendChild(item);
     });
+  }
+
+  /* ─── Imported rules: keep or remove them all in one click ── */
+  function importedRules() {
+    return allSelectors.filter((rule) => rule && typeof rule === 'object' && rule.imported === true && rule.permanent !== true);
+  }
+
+  function buildImportedBanner() {
+    const t = LOCALES[currentLang];
+    const count = importedRules().length;
+    const bar = document.createElement('div');
+    bar.className = 'imported-banner';
+
+    const label = document.createElement('span');
+    label.className = 'imported-banner-text';
+    label.textContent = count === 1 ? t.importedBannerOne : fill(t.importedBanner, { n: count });
+
+    const makeButton = (text, title, handler) => {
+      const button = document.createElement('button');
+      button.className = 'win-btn win-btn-sm';
+      button.type = 'button';
+      button.title = title;
+      const span = document.createElement('span');
+      span.textContent = text;
+      button.appendChild(span);
+      button.addEventListener('click', handler);
+      return button;
+    };
+    bar.appendChild(label);
+    bar.appendChild(makeButton(t.importedKeep, t.importedKeepTitle, keepImported));
+    bar.appendChild(makeButton(t.importedRemove, t.importedRemoveTitle, removeImported));
+    return bar;
+  }
+
+  /* The imported rules become the user's own: same rules, no label. */
+  async function keepImported() {
+    if (!currentDomain) return;
+    const key = `pe_selectors_${currentDomain}`;
+    const data = await storage.get(key);
+    const rules = (data[key] || []).map((rule) => {
+      if (!rule || typeof rule !== 'object' || rule.imported !== true) return rule;
+      const own = { ...rule };
+      delete own.imported;
+      return own;
+    });
+    await storage.set({ [key]: rules });
+    RetroAudio.playSelection();
+    await refreshSelectorsList();
+  }
+
+  /* One click, no questions: the elements come back as soon as the rules go. */
+  async function removeImported() {
+    if (!currentDomain) return;
+    const key = `pe_selectors_${currentDomain}`;
+    const data = await storage.get(key);
+    const rules = (data[key] || []).filter((rule) => !(rule && typeof rule === 'object' && rule.imported === true && rule.permanent !== true));
+    await storage.set({ [key]: rules });
+    await sendMessageToTab({ type: 'REFRESH_RULES', silent: true });
+    RetroAudio.playReset();
+    await refreshSelectorsList();
   }
 
   /* ─── Menu Bar Controls ──────────────────────────────────── */
@@ -714,6 +783,191 @@
       showAlert('importFailedTitle', 'importFailedMsg', '❌');
     }
   }
+
+  /* ─── Share rules as a code / Import from a code ──────────── */
+  // "{n} rules for {site}" -> text. Used on locale strings only.
+  function fill(template, values) {
+    return template.replace(/\{(\w+)\}/g, (match, name) => (name in values ? String(values[name]) : match));
+  }
+
+  /* navigator.clipboard where the browser lets the popup use it, otherwise a
+   * throwaway <textarea> and execCommand('copy'). Resolves true when copied. */
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (err) {
+      // Fall through to the textarea route.
+    }
+    try {
+      const box = document.createElement('textarea');
+      box.value = text;
+      box.setAttribute('readonly', '');
+      box.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(box);
+      box.select();
+      const copied = document.execCommand('copy');
+      box.remove();
+      return copied;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  async function copyRulesAsCode() {
+    const fail = (messageKey, titleKey = 'codeCopyFailedTitle') => {
+      RetroAudio.playError();
+      showAlert(titleKey, messageKey, '⚠️');
+    };
+    if (!currentDomain) return fail('codeNoSiteMsg');
+    const key = `pe_selectors_${currentDomain}`;
+    const data = await storage.get(key);
+    const rules = PE_normalizeRules(data[key] || []);
+    if (rules.length === 0) return fail('codeNothingMsg');
+    const code = PE_buildShare(currentDomain, rules);
+    if (!code) return fail('codeTooBigMsg');
+    if (await copyText(code)) {
+      RetroAudio.playSelection();
+      showAlert('codeCopiedTitle', 'codeCopiedMsg', '📋');
+    } else {
+      fail('codeCopyFailedMsg');
+    }
+  }
+
+  const codeOverlay = document.getElementById('code-overlay');
+  const codeInput = document.getElementById('code-input');
+  const codePreview = document.getElementById('code-preview');
+  const codeAddBtn = document.getElementById('btn-add-code');
+  const codeCancelBtn = document.getElementById('btn-cancel-code');
+  const codeCloseBtn = document.getElementById('btn-close-code');
+  const CODE_PREVIEW_ROWS = 5;
+  // Why PE_parseShare said no -> the sentence that explains it.
+  const CODE_ERRORS = {
+    empty: 'codeHint',
+    size: 'codeErrSize',
+    format: 'codeErrFormat',
+    version: 'codeErrVersion',
+    decode: 'codeErrDecode',
+    domain: 'codeErrDomain',
+    'too-many': 'codeErrTooMany',
+    rules: 'codeErrRules'
+  };
+  let codeParsed = null;
+  let codePreviousFocus = null;
+
+  function isCodeOpen() {
+    return codeOverlay.style.display === 'flex';
+  }
+
+  function openCodeDialog() {
+    codeInput.value = '';
+    renderCodePreview();
+    codePreviousFocus = document.activeElement;
+    codeOverlay.style.display = 'flex';
+    codeInput.focus();
+  }
+
+  function closeCodeDialog() {
+    codeOverlay.style.display = 'none';
+    codeInput.value = '';
+    codeParsed = null;
+    if (codePreviousFocus && codePreviousFocus.focus) codePreviousFocus.focus();
+    codePreviousFocus = null;
+  }
+
+  /* What the pasted code holds, before anything is added. Everything that comes
+   * from the code is put in with textContent: it is someone else's text. */
+  function renderCodePreview() {
+    const t = LOCALES[currentLang];
+    const addLine = (className, text, title) => {
+      const line = document.createElement('div');
+      line.className = className;
+      line.textContent = text;
+      if (title) line.title = title;
+      codePreview.appendChild(line);
+    };
+    codePreview.textContent = '';
+    codeParsed = null;
+    codeAddBtn.disabled = true;
+
+    if (!codeInput.value.trim()) {
+      addLine('code-hint', t.codeHint);
+      return;
+    }
+    const result = PE_parseShare(codeInput.value);
+    if (!result.ok) {
+      addLine('code-error', t[CODE_ERRORS[result.reason]] || t.codeErrDecode);
+      return;
+    }
+    codeParsed = result;
+    addLine('code-summary', fill(t.codeSummary, { n: result.rules.length, site: result.domain }));
+    result.rules.slice(0, CODE_PREVIEW_ROWS).forEach((rule) => {
+      addLine(`selector-text text-${rule.action}`, `${rule.action === 'stretch' ? '↔' : '✕'} ${rule.selector}`, rule.selector);
+    });
+    if (result.rules.length > CODE_PREVIEW_ROWS) {
+      addLine('code-more', fill(t.codeMore, { n: result.rules.length - CODE_PREVIEW_ROWS }));
+    }
+    if (result.skipped > 0) addLine('code-skipped', fill(t.codeSkipped, { n: result.skipped }));
+    codeAddBtn.disabled = false;
+  }
+
+  /* Merges the rules into the site's list. Rules you already have stay yours;
+   * the new ones are marked imported. */
+  async function addSharedRules() {
+    if (!codeParsed) return;
+    const { domain, rules } = codeParsed;
+    codeAddBtn.disabled = true;
+    try {
+      // The same scope rule as everywhere else: with "all subdomains" on, a rule
+      // for www.example.com is kept under example.com.
+      const site = await getDomainToUse(domain);
+      const key = SELECTOR_KEY_PREFIX + site;
+      const data = await storage.get(key);
+      const current = PE_normalizeRules(data[key] || []);
+      const merged = PE_normalizeRules([...current, ...rules]);
+      const added = merged.length - current.length;
+      await storage.set({ [key]: merged });
+      closeCodeDialog();
+      await sendMessageToTab({ type: 'REFRESH_RULES', silent: true });
+      await refreshSelectorsList();
+
+      const t = LOCALES[currentLang];
+      let message = added === 0 ? fill(t.codeAddedNone, { site }) : fill(t.codeAddedMsg, { n: added, site });
+      if (added > 0 && site !== currentDomain) message += ' ' + fill(t.codeAddedElsewhere, { site });
+      RetroAudio.playSelection();
+      showAlert('codeAddedTitle', message, '✔️');
+    } catch (err) {
+      console.error('[PageEraser] Adding shared rules failed:', err);
+      closeCodeDialog();
+      RetroAudio.playError();
+      showAlert('importFailedTitle', 'codeAddFailedMsg', '❌');
+    }
+  }
+
+  codeInput.addEventListener('input', renderCodePreview);
+  codeAddBtn.addEventListener('click', addSharedRules);
+  codeCancelBtn.addEventListener('click', closeCodeDialog);
+  codeCloseBtn.addEventListener('click', closeCodeDialog);
+  document.getElementById('menu-item-copycode').addEventListener('click', copyRulesAsCode);
+  document.getElementById('menu-item-importcode').addEventListener('click', openCodeDialog);
+
+  // Same keyboard rules as the other dialogs: Esc closes, Tab stays inside.
+  document.addEventListener('keydown', (e) => {
+    if (!isCodeOpen() || isAlertOpen() || isConfirmOpen()) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeCodeDialog();
+    } else if (e.key === 'Tab') {
+      const stops = [codeInput, codeAddBtn, codeCancelBtn, codeCloseBtn].filter((el) => !el.disabled);
+      const at = stops.indexOf(document.activeElement);
+      const next = e.shiftKey ? stops[(at <= 0 ? stops.length : at) - 1] : stops[(at + 1) % stops.length];
+      e.preventDefault();
+      next.focus();
+    }
+  }, true);
 
   const importFileInput = document.getElementById('import-file-input');
 

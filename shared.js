@@ -113,6 +113,11 @@ function PE_isSafeSelector(sel) {
  * A rule may also carry `permanent: true`: the user deleted it from the
  * Recycle Bin for good. It keeps hiding the element, but is no longer listed
  * for restoring and Ctrl+Z skips it. Restore All Layout still clears it.
+ *
+ * It may also carry `imported: true`: the rule came from someone else's code
+ * (see PE_parseShare). The popup lists those under their own heading so they
+ * can be kept or removed in one click. A rule of your own wins over an imported
+ * copy of the same rule.
  */
 function PE_normalizeRules(list) {
   if (!Array.isArray(list)) return [];
@@ -127,14 +132,138 @@ function PE_normalizeRules(list) {
     if (!PE_isSafeSelector(selector)) continue;
     const trimmed = selector.trim();
     const permanent = !isString && item && item.permanent === true;
+    const imported = !isString && item && item.imported === true;
     const dedupeKey = `${action}::${trimmed}`;
     if (seen.has(dedupeKey)) {
-      // The same rule twice: if either copy was deleted for good, it stays so.
-      if (permanent) out[seen.get(dedupeKey)].permanent = true;
+      // The same rule twice: if either copy was deleted for good, it stays so;
+      // if either copy is your own, the rule is yours, not an imported one.
+      const kept = out[seen.get(dedupeKey)];
+      if (permanent) kept.permanent = true;
+      if (!imported) delete kept.imported;
       continue;
     }
     seen.set(dedupeKey, out.length);
-    out.push(permanent ? { selector: trimmed, action, permanent: true } : { selector: trimmed, action });
+    const rule = { selector: trimmed, action };
+    if (permanent) rule.permanent = true;
+    if (imported) rule.imported = true;
+    out.push(rule);
   }
   return out;
+}
+
+/* ─── Rule Sharing Codes ───────────────────────────────────
+ * "Copy Rules as Code" turns the rules of one site into a single line of text
+ * that can be sent in a chat or an email; "Import from Code" reads it back.
+ * Nothing here touches the network or any extension API: a code is only text
+ * that moves through the clipboard.
+ *
+ *   pageeraser:1:<base64url of {"d":"example.com","r":[{"s":".ad"},{"s":".wide","a":"stretch"}]}>
+ *
+ * d = the site the rules belong to, r = the rules (a = "stretch"; hide when
+ * left out). The "1" is the format version: a future format gets a new number
+ * and an older extension says so instead of guessing.
+ *
+ * A code comes from someone else, so everything in it is checked the way an
+ * imported backup file is (PE_isSafeSelector, PE_normalizeRules) and a little
+ * more: selectors that would blank a whole page are left out, sizes are
+ * capped, and every rule is marked `imported`.
+ */
+const PE_SHARE_PREFIX = 'pageeraser:1:';
+const PE_SHARE_MAX_CHARS = 200000;
+const PE_SHARE_MAX_RULES = 500;
+// A code is not allowed to carry a rule that hides the whole page.
+const PE_SHARE_TOO_BROAD = new Set(['*', 'html', 'body', 'head', ':root', 'html > body', 'html body']);
+// What chat apps put around a pasted code: quotes, brackets, a full stop.
+const PE_SHARE_WRAP_START = new Set(['`', '"', "'", '\u201c', '\u201d', '\u2018', '\u2019', '<', '(', '[']);
+const PE_SHARE_WRAP_END = new Set(['`', '"', "'", '\u201c', '\u201d', '\u2018', '\u2019', '>', ')', ']', '.', ',', ';', ':', '!']);
+
+function PE_isValidHostname(name) {
+  if (typeof name !== 'string' || name.length < 1 || name.length > 253) return false;
+  return name.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
+}
+
+function PE_b64urlEncode(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/* Throws on anything that is not base64url of valid UTF-8. */
+function PE_b64urlDecode(payload) {
+  const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+}
+
+/* The code for a site's rules, or null when there is nothing to share, the
+ * site name is not a hostname, or the rules do not fit in one code. */
+function PE_buildShare(domain, rules) {
+  const site = typeof domain === 'string' ? domain.trim().toLowerCase() : '';
+  if (!PE_isValidHostname(site)) return null;
+  const clean = PE_normalizeRules(rules);
+  if (clean.length === 0 || clean.length > PE_SHARE_MAX_RULES) return null;
+  const payload = {
+    d: site,
+    r: clean.map((rule) => (rule.action === 'stretch' ? { s: rule.selector, a: 'stretch' } : { s: rule.selector }))
+  };
+  const code = PE_SHARE_PREFIX + PE_b64urlEncode(JSON.stringify(payload));
+  return code.length <= PE_SHARE_MAX_CHARS ? code : null;
+}
+
+/* Reads a pasted code. Returns { ok: true, domain, rules, skipped } — rules are
+ * normalised and marked imported, skipped counts what was left out — or
+ * { ok: false, reason } with reason one of: empty, size, format, version,
+ * decode, domain, too-many, rules. */
+function PE_parseShare(text) {
+  if (typeof text !== 'string') return { ok: false, reason: 'format' };
+  // Room for the line breaks a chat app adds, but nothing like a pasted file:
+  // this runs on every keystroke, on text somebody else wrote.
+  if (text.length > PE_SHARE_MAX_CHARS * 2) return { ok: false, reason: 'size' };
+  // Chat apps wrap long lines and put quotes or a full stop around what you copy.
+  // Trimmed with loops, not a regex: a trailing-run pattern is quadratic on a
+  // long run of such characters followed by something else.
+  const flat = text.replace(/\s+/g, '');
+  let from = 0;
+  let to = flat.length;
+  while (from < to && PE_SHARE_WRAP_START.has(flat[from])) from++;
+  while (to > from && PE_SHARE_WRAP_END.has(flat[to - 1])) to--;
+  const cleaned = flat.slice(from, to);
+  if (!cleaned) return { ok: false, reason: 'empty' };
+  if (cleaned.length > PE_SHARE_MAX_CHARS) return { ok: false, reason: 'size' };
+
+  const head = /^pageeraser:(\d{1,3}):(.*)$/i.exec(cleaned);
+  if (!head) return { ok: false, reason: 'format' };
+  if (head[1] !== '1') return { ok: false, reason: 'version' };
+  if (!/^[A-Za-z0-9_-]+$/.test(head[2])) return { ok: false, reason: 'decode' };
+
+  let data;
+  try {
+    data = JSON.parse(PE_b64urlDecode(head[2]));
+  } catch (err) {
+    return { ok: false, reason: 'decode' };
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return { ok: false, reason: 'decode' };
+
+  const domain = typeof data.d === 'string' ? data.d.trim().toLowerCase() : '';
+  if (!PE_isValidHostname(domain)) return { ok: false, reason: 'domain' };
+  if (!Array.isArray(data.r)) return { ok: false, reason: 'rules' };
+  if (data.r.length > PE_SHARE_MAX_RULES) return { ok: false, reason: 'too-many' };
+
+  const candidates = [];
+  for (const item of data.r) {
+    if (!item || typeof item !== 'object' || typeof item.s !== 'string') continue;
+    if (item.a !== undefined && item.a !== 'hide' && item.a !== 'stretch') continue;
+    if (item.s.length > PE_SELECTOR_MAX_LENGTH * 2) continue; // before any pattern work on it
+    const selector = item.s.trim();
+    const shape = selector.toLowerCase().replace(/\s*>\s*/g, ' > ').replace(/\s+/g, ' ');
+    if (PE_SHARE_TOO_BROAD.has(shape)) continue;
+    candidates.push({ selector, action: item.a === 'stretch' ? 'stretch' : 'hide', imported: true });
+  }
+  const rules = PE_normalizeRules(candidates);
+  if (rules.length === 0) return { ok: false, reason: 'rules' };
+  return { ok: true, domain, rules, skipped: data.r.length - rules.length };
 }

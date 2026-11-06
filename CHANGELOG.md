@@ -4,6 +4,47 @@ All notable changes to PageEraser are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.11.0] — 2026-11-05
+
+### Added
+
+- **Share rules as a code.** *File → Copy Rules as Code* puts the current site's
+  rules on the clipboard as one line of text, `pageeraser:1:<base64url of the rules>`.
+  *File → Import from Code…* takes a pasted code, shows which site it is for, how
+  many rules it holds and the first few selectors, and adds them only when you press
+  *Add rules*. It is only text: no server, no link, no account, no new permission,
+  no network. The format is versioned (`1`), so a later format can be told apart; an
+  older extension says "this code comes from a newer PageEraser".
+- **Imported rules** carry an `imported` mark and are listed last, under their own
+  heading: *Keep* makes them your own, *Remove* deletes all of them in one click and
+  the elements come back. A rule you already had stays yours (it is never relabelled),
+  and editing or deleting an imported rule makes it yours too.
+- `PE_buildShare`, `PE_parseShare` (with `PE_isValidHostname`, `PE_b64urlEncode`,
+  `PE_b64urlDecode`) in `shared.js`.
+
+### Security
+
+- A pasted code is untrusted input and is checked as hard as a backup file, and a
+  little harder: every selector goes through `PE_isSafeSelector`; a code is capped at
+  200,000 characters and 500 rules; the text must be strict UTF-8; the site must be a
+  valid hostname; and rules that would hide the whole page (`*`, `html`, `body`,
+  `head`, `:root`, `html > body`) are left out. What a code held and what was left
+  out is shown before anything is saved, and everything from the code is put in the
+  popup as text, never as HTML.
+
+### Changed
+
+- The store summary (manifest `description`) names what the extension does today:
+  erase, X-Ray, Extract to Code and Visual Diff.
+- The privacy policy covers the clipboard use of the sharing code.
+
+### Known limitations
+
+- A code carries the site name as the sender stored it. With *all subdomains* on, the
+  importing side keeps the rules under the base domain (so `www.example.com` becomes
+  `example.com`); with it off, a code made for `example.com` applies on `example.com`
+  only, not on `www.example.com`. The dialog names the site the rules are added for.
+
 ## [1.10.0] — 2026-11-05
 
 ### Added

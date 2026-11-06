@@ -959,6 +959,182 @@ check('paste, drag-over and drop are listened for on window in the capture phase
   check('no two content-script files declare the same top-level name', dupes, []);
 })();
 
+/* ─── Sharing rules as a code ───────────────────────────── */
+console.log('shared.js — rule sharing codes');
+(function shareCodeTests() {
+  const code = (obj) => 'pageeraser:1:' + PE_b64urlEncode(JSON.stringify(obj));
+  const reason = (text) => { const r = PE_parseShare(text); return r.ok ? 'ok' : r.reason; };
+  const b64 = (bytes) => Buffer.from(bytes).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  // the round trip
+  const mine = [{ selector: '.ad' }, { selector: 'main > .wide', action: 'stretch' }, '.legacy [title="çay ☕"]', { selector: '.gone', action: 'hide', permanent: true }];
+  const built = PE_buildShare('Example.COM', mine);
+  check('share: a code starts with pageeraser:1: and is plain URL-safe text',
+    [built.startsWith('pageeraser:1:'), /^[A-Za-z0-9:_-]+$/.test(built)], [true, true]);
+  const back = PE_parseShare(built);
+  check('share: parse(build(rules)) gives the rules back, lower-cased site, every rule marked imported',
+    [back.ok, back.domain, back.skipped, back.rules], [true, 'example.com', 0, [
+      { selector: '.ad', action: 'hide', imported: true },
+      { selector: 'main > .wide', action: 'stretch', imported: true },
+      { selector: '.legacy [title="çay ☕"]', action: 'hide', imported: true },
+      { selector: '.gone', action: 'hide', imported: true }]]);
+  check('share: flags that are the sender\'s business (permanent, imported) are not put in the code',
+    JSON.parse(PE_b64urlDecode(built.slice('pageeraser:1:'.length))),
+    { d: 'example.com', r: [{ s: '.ad' }, { s: 'main > .wide', a: 'stretch' }, { s: '.legacy [title="çay ☕"]' }, { s: '.gone' }] });
+
+  // what chat apps do to a pasted code
+  const half = Math.floor(built.length / 2);
+  check('share: line breaks, quotes, a full stop and a capitalised prefix do not matter',
+    [`  "${built.slice(0, half)}\n${built.slice(half)}".  `, '`' + built + '`', built.replace('pageeraser', 'PageEraser') + '.'].map(reason), ['ok', 'ok', 'ok']);
+
+  // what is refused, and why
+  check('share: refusals name their reason',
+    [PE_parseShare(), '', '   ', 'hello', 'pageeraser:', 'pageeraser:2:abc', 'pageeraser:01:abc', 'pageeraser:1:@@@', 'pageeraser:1:' + PE_b64urlEncode('not json'),
+     'pageeraser:1:' + b64([0xff, 0xfe, 0xfd]), 'pageeraser:1:' + PE_b64urlEncode('[1,2]'), 'pageeraser:1:' + PE_b64urlEncode('null'),
+     'pageeraser:1:a', 'x'.repeat(200001)].map((x) => (typeof x === 'object' ? x.reason : reason(x))),
+    ['format', 'empty', 'empty', 'format', 'format', 'version', 'version', 'decode', 'decode', 'decode', 'decode', 'decode', 'decode', 'size']);
+  // Valid JSON with one stray byte inside a string: only a strict UTF-8 decoder notices.
+  const strayByte = b64(Buffer.concat([Buffer.from('{"d":"a.com","r":[{"s":".x'), Buffer.from([0xff]), Buffer.from('y"}]}')]));
+  check('share: a stray byte that is not UTF-8 makes the code unreadable instead of being quietly replaced',
+    reason('pageeraser:1:' + strayByte), 'decode');
+  // Text somebody else wrote, run on every keystroke: it must stay fast and never throw.
+  const timed = (f) => { const t0 = process.hrtime.bigint(); const v = f(); return [v, Number(process.hrtime.bigint() - t0) / 1e6]; };
+  const slow = [
+    timed(() => reason('pageeraser:1:abc' + '>'.repeat(100000) + 'x')),
+    timed(() => reason('pageeraser:1:abc' + '.'.repeat(150000) + 'x')),
+    timed(() => reason('"'.repeat(150000) + 'pageeraser:1:abc')),
+    timed(() => reason(' '.repeat(2000000))),
+    timed(() => reason('x'.repeat(5000000))),
+    timed(() => reason(code({ d: 'a.com', r: [{ s: ' '.repeat(60000) + 'x' }, { s: ' '.repeat(30000) + '>' + ' '.repeat(30000) + 'x' }] }))),
+    timed(() => reason('pageeraser:1:' + PE_b64urlEncode('['.repeat(100000)))),
+    timed(() => reason('pageeraser:1:' + 'A'.repeat(150000)))];
+  check('share: hostile text is answered quickly (each under 250 ms) and with the right reason',
+    [slow.map((s) => s[0]), slow.map((s) => s[1] < 250)],
+    [['decode', 'decode', 'decode', 'size', 'size', 'rules', 'decode', 'decode'], Array(8).fill(true)]);
+  check('share: very long selectors are dropped before any pattern work', reason(code({ d: 'a.com', r: [{ s: '.a'.repeat(5000) }] })), 'rules');
+
+  // Many random damages to a good code: never an exception, and whatever is accepted is safe.
+  let seed = 12345;
+  const rand = (n) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  const good = PE_buildShare('example.com', [{ selector: '.ad' }, { selector: 'main > .wide', action: 'stretch' }, { selector: '#x [data-y="z"]' }]);
+  const alphabet = 'abcXYZ019_-:{}@;/*\\ "\'<>()[]=~|!\n\u00e7\u2615';
+  let threw = 0; let accepted = 0; let unsafe = 0;
+  for (let i = 0; i < 4000; i++) {
+    let s = good;
+    for (let k = rand(4) + 1; k > 0; k--) {
+      const at = rand(s.length + 1);
+      const op = rand(4);
+      if (op === 0) s = s.slice(0, at) + alphabet[rand(alphabet.length)] + s.slice(at + 1);
+      else if (op === 1) s = s.slice(0, at) + alphabet[rand(alphabet.length)] + s.slice(at);
+      else if (op === 2) s = s.slice(0, at) + s.slice(at + 1 + rand(3));
+      else s = s.slice(0, Math.max(at, 14));
+    }
+    let r;
+    try { r = PE_parseShare(s); } catch (e) { threw++; continue; }
+    if (!r.ok) continue;
+    accepted++;
+    if (!PE_isValidHostname(r.domain) || r.rules.length === 0 || r.rules.length > 500 ||
+        r.rules.some((x) => x.imported !== true || !PE_isSafeSelector(x.selector) || !['hide', 'stretch'].includes(x.action))) unsafe++;
+  }
+  check('share: 4000 damaged codes: no exception, and everything accepted is a valid, safe, imported rule', [threw, unsafe, accepted > 0], [0, 0, true]);
+
+  check('share: the site must be a hostname',
+    ['bad domain', '-x.com', 'a..b', 'x.com-', '', 'a'.repeat(64) + '.com', 'exa_mple.com', 'http://x.com', 'x.com/path', 5, null].map((d) => reason(code({ d, r: [{ s: '.x' }] }))),
+    Array(11).fill('domain'));
+  check('share: single-label hosts, punycode and IP addresses are sites too',
+    ['localhost', 'xn--bcher-kva.example', '192.168.0.1', 'A.B.c'].map((d) => reason(code({ d, r: [{ s: '.x' }] }))), ['ok', 'ok', 'ok', 'ok']);
+  check('share: no rules / not a list / too many rules',
+    [reason(code({ d: 'a.com' })), reason(code({ d: 'a.com', r: 'x' })), reason(code({ d: 'a.com', r: [] })),
+     reason(code({ d: 'a.com', r: Array.from({ length: 500 }, (_, i) => ({ s: '.c' + i })) })),
+     reason(code({ d: 'a.com', r: Array.from({ length: 501 }, (_, i) => ({ s: '.c' + i })) }))],
+    ['rules', 'rules', 'rules', 'ok', 'too-many']);
+
+  // what is left out of a code that is otherwise fine
+  const mixed = PE_parseShare(code({ d: 'a.com', r: [
+    { s: '.ok' }, { s: 'x{} body{display:none}' }, { s: '@import url(//evil.test/x.css)' }, { s: 'a; color:red' }, { s: '/* x */ .y' },
+    { s: 'body' }, { s: 'HTML > BODY' }, { s: ' html>body ' }, { s: '*' }, { s: ':root' }, { s: '' }, { s: 5 }, { s: '.a', a: 'delete' }, null, 'str', { s: '.ok' }] }));
+  check('share: unsafe selectors, whole-page selectors, junk entries and repeats are left out and counted',
+    [mixed.ok, mixed.rules, mixed.skipped], [true, [{ selector: '.ok', action: 'hide', imported: true }], 15]);
+  check('share: body-level rules that are narrower than the whole page are fine',
+    PE_parseShare(code({ d: 'a.com', r: [{ s: 'body > .banner' }, { s: 'html .x' }, { s: 'body.dark' }] })).rules.length, 3);
+  check('share: __proto__ in a code does not touch Object.prototype',
+    [reason('pageeraser:1:' + PE_b64urlEncode('{"__proto__":{"polluted":1},"d":"a.com","r":[{"s":".x","__proto__":{"polluted":2}}]}')), ({}).polluted], ['ok', undefined]);
+
+  // building
+  check('share: nothing to share, a bad site name or too many rules build no code',
+    [PE_buildShare('a.com', []), PE_buildShare('a.com', ['{bad}']), PE_buildShare('not a host', [{ selector: '.x' }]), PE_buildShare(undefined, [{ selector: '.x' }]),
+     PE_buildShare('a.com', Array.from({ length: 501 }, (_, i) => ({ selector: '.c' + i }))) === null,
+     PE_buildShare('a.com', Array.from({ length: 500 }, (_, i) => ({ selector: '.c' + i }))) !== null],
+    [null, null, null, null, true, true]);
+  check('share: a code that would be longer than the limit is not built',
+    PE_buildShare('a.com', Array.from({ length: 200 }, (_, i) => ({ selector: ('.long' + i + '-').repeat(400).slice(0, 1900) }))), null);
+  check('share: base64url round-trips text with every kind of character, in any length',
+    ['', 'a', 'ab', 'abc', 'çay ☕ 日本語 \u{1F600}', 'x'.repeat(100000)].map((s) => PE_b64urlDecode(PE_b64urlEncode(s)) === s), Array(6).fill(true));
+  check('share: PE_b64urlEncode never emits +, / or =', /[+/=]/.test(PE_b64urlEncode('\xfb\xff\xbf??>>~~')), false);
+
+  // the imported flag in PE_normalizeRules
+  check('normalizeRules: the imported flag survives, after permanent',
+    PE_normalizeRules([{ selector: '.a', imported: true }, { selector: '.b', action: 'stretch', permanent: true, imported: true }, { selector: '.c', imported: 'yes' }]),
+    [{ selector: '.a', action: 'hide', imported: true }, { selector: '.b', action: 'stretch', permanent: true, imported: true }, { selector: '.c', action: 'hide' }]);
+  check('normalizeRules: a rule of your own wins over an imported copy, whichever comes first',
+    [PE_normalizeRules([{ selector: '.a' }, { selector: '.a', imported: true }]), PE_normalizeRules([{ selector: '.a', imported: true }, '.a']),
+     PE_normalizeRules([{ selector: '.a', imported: true }, { selector: '.a', imported: true }])],
+    [[{ selector: '.a', action: 'hide' }], [{ selector: '.a', action: 'hide' }], [{ selector: '.a', action: 'hide', imported: true }]]);
+  check('normalizeRules: merging your rules with a code keeps yours unlabelled and labels only the new ones',
+    PE_normalizeRules([...PE_normalizeRules(['.mine', { selector: '.both', action: 'hide' }]), ...PE_parseShare(code({ d: 'a.com', r: [{ s: '.both' }, { s: '.new' }] })).rules]),
+    [{ selector: '.mine', action: 'hide' }, { selector: '.both', action: 'hide' }, { selector: '.new', action: 'hide', imported: true }]);
+
+  // wiring
+  const sharedSrc = read('shared.js');
+  const shareSection = sharedSrc.slice(sharedSrc.indexOf('/* ─── Rule Sharing Codes'));
+  check('the sharing code touches no network and no extension API',
+    /fetch\(|XMLHttpRequest|sendBeacon|WebSocket|chrome\.|https?:\/\//.test(shareSection.replace(/\/\*[\s\S]*?\*\//g, '')), false);
+
+  const popupSrc = read('popup.js').replace(/\r/g, '');
+  const popupHtmlSrc = read('popup.html');
+  const parseFn = shareSection.slice(shareSection.indexOf('function PE_parseShare'));
+  const reasons = [...new Set([...parseFn.matchAll(/reason: '([a-z-]+)'/g)].map((m) => m[1]))].sort();
+  const errorMap = popupSrc.slice(popupSrc.indexOf('const CODE_ERRORS = {'));
+  const mapped = Object.fromEntries([...errorMap.slice(0, errorMap.indexOf('};')).matchAll(/'?([a-z-]+)'?:\s*'(\w+)'/g)].map((m) => [m[1], m[2]]));
+  check('every reason PE_parseShare can give has a sentence in both languages',
+    [Object.keys(mapped).sort(), Object.values(mapped).filter((k) => !enKeys.has(k) || !trKeys.has(k))], [reasons, []]);
+
+  const placeholders = (block) => Object.fromEntries([...block.matchAll(/^\s{4}(\w+):(.*)$/gm)].map((m) => [m[1], [...m[2].matchAll(/\{(\w+)\}/g)].map((p) => p[1]).sort().join(',')]));
+  const enPh = placeholders(enBlock), trPh = placeholders(trBlock);
+  check('locales: {placeholders} are the same in English and Turkish for every key',
+    Object.keys(enPh).filter((k) => k in trPh && enPh[k] !== trPh[k]), []);
+
+  check('popup.html has the menu items and the dialog, and they are translated',
+    ['menu-item-copycode', 'menu-item-importcode', 'code-overlay', 'code-input', 'code-preview', 'btn-add-code', 'btn-cancel-code', 'btn-close-code']
+      .filter((id) => !popupHtmlSrc.includes(`id="${id}"`)).concat(
+        ['copyCodeMenu', 'importCodeMenu', 'codeDialogTitle', 'codePaste', 'codeSafeNote', 'codeAddBtn', 'cancelBtn'].filter((k) => !popupHtmlSrc.includes(`data-i18n="${k}"`))),
+    []);
+  check('the dialog opens as a dialog, the Add button starts disabled, the text box has no spell-check and takes no autofill',
+    [/id="code-overlay"[\s\S]*?role="dialog"[\s\S]*?aria-modal="true"/.test(popupHtmlSrc), /id="btn-add-code"[^>]*\sdisabled/.test(popupHtmlSrc),
+     /id="code-input"[\s\S]*?spellcheck="false"[\s\S]*?autocomplete="off"/.test(popupHtmlSrc)], [true, true, true]);
+  const functionBody = (name) => { const m = new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}\\n`).exec(popupSrc); return m ? m[0] : ''; };
+  check('what comes out of a pasted code is put on the page as text, never as HTML',
+    ['renderCodePreview', 'buildImportedBanner', 'addSharedRules'].map((n) => { const b = functionBody(n); return b.length > 100 && !/innerHTML|insertAdjacentHTML|outerHTML/.test(b); }), [true, true, true]);
+  check('adding a code stores nothing until the button is pressed, goes through the scope rule, and merges instead of replacing',
+    [/codeAddBtn\.addEventListener\('click', addSharedRules\)/.test(popupSrc), functionBody('addSharedRules').includes('await getDomainToUse(domain)'),
+     functionBody('addSharedRules').includes('PE_normalizeRules([...current, ...rules])'), (functionBody('renderCodePreview').match(/storage\./g) || []).length],
+    [true, true, true, 0]);
+  check('Keep drops the label, Remove deletes only imported rules that are not permanent, and neither asks a question',
+    [functionBody('keepImported').includes('const own = { ...rule };') && functionBody('keepImported').includes('delete own.imported;'),
+     functionBody('removeImported').includes("rule.imported === true && rule.permanent !== true"),
+     /askConfirm|showAlert/.test(functionBody('removeImported') + functionBody('keepImported'))], [true, true, false]);
+  check('imported rules are listed after your own, under one banner, with a mark on each row',
+    [popupSrc.includes('const ordered = [...filtered.filter((rule) => !isImportedRule(rule)), ...filtered.filter(isImportedRule)];'),
+     popupSrc.includes("isImportedRule(itemData) ? 'selector-item imported' : 'selector-item'"), (popupSrc.match(/buildImportedBanner\(\)/g) || []).length],
+    [true, true, 2]);
+  check('Escape closes the dialog and Tab stays inside it, without fighting the alert and confirm dialogs',
+    [/if \(!isCodeOpen\(\) \|\| isAlertOpen\(\) \|\| isConfirmOpen\(\)\) return;/.test(popupSrc), popupSrc.includes('[codeInput, codeAddBtn, codeCancelBtn, codeCloseBtn]')], [true, true]);
+  check('the version in the manifest, the README badge and the top of the changelog agree',
+    [read('README.md').includes(`Version-${manifest.version}-`), new RegExp(`^## \\[${manifest.version.replace(/\./g, '\\.')}\\]`, 'm').test(read('CHANGELOG.md'))], [true, true]);
+  check('the store summary (manifest description) fits the 132 characters the Web Store shows',
+    [manifest.description.length > 40, manifest.description.length <= 132], [true, true]);
+})();
+
 /* ─── Review fixes: tolerance wiring, synthetic clicks, popup notice ─── */
 console.log('release-candidate fixes');
 (function rcFixTests() {
@@ -1027,6 +1203,23 @@ console.log('release-candidate fixes');
       async () => answer, () => log.push('notice'), () => log.push('clear'), { close: () => log.push('close') });
     return [await fn({ type: 'TOGGLE_DIFF' }), log];
   };
+  pending.push((async () => {
+    // keepImported: no unused rest-binding (lint), and it must behave exactly as before
+    check('keepImported has no unused destructured binding', /\{\s*imported\s*,\s*\.\.\./.test(popupSrc), false);
+    if (grab('keepImported')) {
+      const key = 'pe_selectors_example.com';
+      const stored = [{ selector: '.a', action: 'hide', imported: true }, { selector: '.b', action: 'hide' },
+        { selector: '.c', action: 'stretch', imported: true, permanent: true }, null, 'junk'];
+      const original = JSON.parse(JSON.stringify(stored));
+      let saved = null; let refreshed = 0;
+      const keep = new Function('currentDomain', 'storage', 'RetroAudio', 'refreshSelectorsList', `${grab('keepImported')}\nreturn keepImported;`)(
+        'example.com', { get: async () => ({ [key]: stored }), set: async (o) => { saved = o; } }, { playSelection() {} }, async () => { refreshed++; });
+      await keep();
+      check('keepImported: drops only the imported mark (permanent stays), leaves other entries alone, does not alter what it was handed',
+        [saved && saved[key], stored, refreshed],
+        [[{ selector: '.a', action: 'hide' }, { selector: '.b', action: 'hide' }, { selector: '.c', action: 'stretch', permanent: true }, null, 'junk'], original, 1]);
+    }
+  })());
   pending.push((async () => {
     check('launchOnTab: nothing answered -> the notice is shown and the popup stays open',
       await launch(null), [false, ['notice']]);

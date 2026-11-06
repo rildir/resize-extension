@@ -12,7 +12,7 @@
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-1.10.0-FF4757?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-1.11.0-FF4757?style=for-the-badge)]()
 
 *A Chrome/Edge extension wrapped in a nostalgic Windows 95 aesthetic — because cleaning up the web should be fun.*
 
@@ -75,6 +75,7 @@
 | **CSS Selector Engine** | Automatically generates robust CSS selectors with ID/class/nth-of-type fallbacks |
 | **Inline Rule Editor** | Edit CSS selectors directly from the popup for fine-tuned control |
 | **Import / Export** | Backup and restore your rules as JSON files across devices |
+| **Share as Code** | Copy a site's rules as one line of text and send it to anyone; they paste it under *File → Import from Code* |
 
 ### 🧭 Advanced DOM Navigation
 | Key | Action |
@@ -208,6 +209,8 @@ Right-click any element on a page to access:
 - **Delete permanently** (✕) takes a rule out of the Recycle Bin: the element stays hidden but can no longer be restored one by one. *Restore All Layout* still clears everything
 - **Drag** rules to the Recycle Bin to restore them — the bin shows as full while there is something to restore
 - **Import/Export** rules as JSON backups via File menu
+- **Share as code**: *File → Copy Rules as Code* puts the current site's rules on your clipboard as one line (`pageeraser:1:…`). The other person opens *File → Import from Code…*, pastes it, sees which site it is for and what it holds, and presses *Add rules*. Nothing is uploaded: the code is only text, so it works in any chat or email
+- **Imported rules** are listed last, under their own heading with *Keep* (they become your own) and *Remove* (all of them, one click). Rules you already had stay yours. A code cannot carry a rule that hides the whole page, and every selector goes through the same checks as an imported backup
 
 ---
 
