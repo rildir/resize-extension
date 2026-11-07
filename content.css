@@ -4,6 +4,34 @@
  * All rules use !important or highly specific classes to avoid site style overrides.
  */
 
+/* Form-control reset for our own in-page UI.
+   Two things round these buttons otherwise: the browser's native button
+   rendering (macOS Chrome / refreshed Chromium form controls), and the host
+   page's own `button { border-radius: … }` rules, which win over any property
+   we never declare. Hence appearance:none + border-radius:0 + !important. */
+.pe-toast-close-btn,
+.pe-toast-undo-btn,
+.pe-paint-tool-btn,
+.pe-paint-toolbox-close,
+.pe-paint-undo,
+.pe-paint-clear,
+.pe-color-box,
+.pe-paint-actions-row button,
+.pe-paint-toolbox button,
+.pe-paint-toolbox input,
+.pe-toast button {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  border-radius: 0 !important;
+  background-image: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  box-sizing: border-box !important;
+}
+
 /* Selection Highlight Box */
 .pe-highlighter {
   position: fixed !important;
@@ -573,4 +601,370 @@
 
 .pe-clippy-drawing:hover .pe-clippy-svg {
   transform: translateY(-5px) rotate(-3deg) !important;
+}
+
+/* ─── Eraser sweep ──────────────────────────────────────────
+ * Erase and Restore wipe the element with a mask instead of popping it in or
+ * out. The mask image is twice the element's width: a hard-edged boundary in
+ * its middle slides across as the position animates, and everything left of
+ * the boundary is masked away. The position overshoots 10% at each end so the
+ * soft edge starts and finishes fully outside the element — no flash on the
+ * first or last frame.
+ *
+ * The classes are added to the page's own element by content.js for the length
+ * of the animation and removed again afterwards.
+ *
+ * 350ms must match PE_SWEEP_MS in content.js (tests/run.js enforces it).
+ */
+@keyframes pe-erase-sweep {
+  from {
+    -webkit-mask-position: 110% 0;
+    mask-position: 110% 0;
+  }
+  to {
+    -webkit-mask-position: -10% 0;
+    mask-position: -10% 0;
+  }
+}
+
+.pe-erasing,
+.pe-restoring {
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 46%, #000 54%, #000 100%) !important;
+  mask-image: linear-gradient(to right, transparent 0%, transparent 46%, #000 54%, #000 100%) !important;
+  -webkit-mask-size: 200% 100% !important;
+  mask-size: 200% 100% !important;
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  animation-name: pe-erase-sweep !important;
+  animation-duration: 350ms !important;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  animation-fill-mode: both !important;
+  pointer-events: none !important;
+}
+
+/* Restore is the same wipe played backwards. */
+.pe-restoring {
+  animation-direction: reverse !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pe-erasing,
+  .pe-restoring {
+    animation: none !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+}
+
+/* ─── Layout X-Ray ──────────────────────────────────────────
+ * One fixed canvas that ignores the pointer, a hover label, and a toolbar that
+ * reuses the Paintbrush 95 window chrome. The chip colours below must match
+ * PE_XRAY_COLORS in modes/xray.js (tests/run.js enforces it).
+ */
+.pe-xray-canvas {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  background: transparent !important;
+  pointer-events: none !important;
+  z-index: 2147483640 !important;
+}
+
+.pe-xray-label {
+  position: fixed !important;
+  box-sizing: border-box !important;
+  max-width: 440px !important;
+  padding: 3px 6px !important;
+  border: 1px solid #ffffff !important;
+  background: #000000 !important;
+  color: #ffffff !important;
+  font: 11px/1.3 "Lucida Console", Consolas, monospace !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  pointer-events: none !important;
+  z-index: 2147483645 !important;
+}
+
+.pe-xray-toolbar {
+  width: 176px !important;
+  top: 16px !important;
+  right: 16px !important;
+  left: auto !important;
+  direction: ltr !important;
+  z-index: 2147483646 !important;
+}
+
+.pe-xray-depth-value {
+  min-width: 16px !important;
+  margin-left: 4px !important;
+  text-align: right !important;
+  font-size: 11px !important;
+  color: #000000 !important;
+}
+
+.pe-xray-legend {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 3px !important;
+}
+
+.pe-xray-chip {
+  padding: 1px 4px !important;
+  border: 2px solid #8a8a8a !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-size: 9px !important;
+  line-height: 1.2 !important;
+}
+.pe-xray-chip-flex { border-color: #ff8a00 !important; }
+.pe-xray-chip-grid { border-color: #a040ff !important; }
+.pe-xray-chip-block { border-color: #2f7bff !important; }
+.pe-xray-chip-inline-block { border-color: #1fb05a !important; }
+.pe-xray-chip-margin { border: 0 !important; background: rgba(255, 150, 0, 0.55) !important; }
+.pe-xray-chip-padding { border: 0 !important; background: rgba(60, 200, 100, 0.55) !important; }
+
+.pe-xray-status {
+  min-height: 12px !important;
+  font-size: 10px !important;
+  color: #000000 !important;
+  word-break: break-word !important;
+}
+
+/* ─── Extract to Code ───────────────────────────────────────
+ * The picker's highlight is violet so it reads as a different tool from the
+ * eraser; the result window reuses the Paintbrush 95 window chrome.
+ */
+.pe-highlighter.pe-extract-mode {
+  border-color: #6c5ce7 !important;
+  outline-color: #ffffff !important;
+  background-color: rgba(108, 92, 231, 0.08) !important;
+}
+
+.pe-highlighter.pe-extract-mode .pe-tooltip {
+  border-color: rgba(108, 92, 231, 0.5) !important;
+}
+
+.pe-highlighter.pe-extract-mode .pe-tooltip-tag {
+  color: #a29bfe !important;
+}
+
+.pe-extract-panel {
+  width: 560px !important;
+  max-width: calc(100vw - 16px) !important;
+  top: 16px !important;
+  direction: ltr !important;
+  z-index: 2147483647 !important;
+}
+
+.pe-extract-tabs {
+  display: flex !important;
+  gap: 2px !important;
+  margin-bottom: -4px !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.pe-extract-tab {
+  padding: 3px 12px !important;
+  background: #c0c0c0 !important;
+  color: #000000 !important;
+  font: 11px "MS Sans Serif", Tahoma, Arial, sans-serif !important;
+  border-top: 1px solid #ffffff !important;
+  border-left: 1px solid #ffffff !important;
+  border-right: 1px solid #808080 !important;
+  border-bottom: 0 !important;
+  box-shadow: 1px 0 0 #000000 !important;
+  cursor: pointer !important;
+  outline: none !important;
+}
+
+.pe-extract-tab.pe-active {
+  font-weight: bold !important;
+  padding-top: 5px !important;
+  margin-top: -2px !important;
+}
+
+.pe-extract-code {
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 6px !important;
+  min-height: 140px !important;
+  max-height: min(46vh, 380px) !important;
+  overflow: auto !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-top: 2px solid #808080 !important;
+  border-left: 2px solid #808080 !important;
+  border-right: 2px solid #ffffff !important;
+  border-bottom: 2px solid #ffffff !important;
+  box-shadow: inset 1px 1px 0 #000000 !important;
+  font: 11px/1.45 "Lucida Console", Consolas, monospace !important;
+  white-space: pre !important;
+  tab-size: 2 !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  text-align: left !important;
+}
+
+.pe-extract-status {
+  min-height: 12px !important;
+  font-size: 10px !important;
+  color: #000000 !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
+
+.pe-tok-tag { color: #000080 !important; }
+.pe-tok-attr { color: #800000 !important; }
+.pe-tok-string { color: #006400 !important; }
+.pe-tok-punct { color: #707070 !important; }
+.pe-tok-comment { color: #808080 !important; font-style: italic !important; }
+.pe-tok-selector { color: #000080 !important; font-weight: bold !important; }
+.pe-tok-prop { color: #800000 !important; }
+.pe-tok-var { color: #800080 !important; }
+.pe-tok-color { color: #007070 !important; }
+.pe-tok-number { color: #0000cd !important; }
+.pe-tok-func { color: #800080 !important; }
+.pe-tok-keyword { color: #000000 !important; }
+
+/* ─── Visual Diff ───────────────────────────────────────────
+ * The design is a canvas laid over the page (absolute, so it scrolls with it,
+ * or fixed when scroll lock is off — modes/diff.js sets that inline), the heat
+ * map another, both ignoring the pointer. The before/after divider is the only
+ * layer that takes the pointer, and only on its own thin handle.
+ */
+.pe-diff-layer,
+.pe-diff-heat {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  background: transparent !important;
+  pointer-events: none !important;
+}
+
+.pe-diff-layer { z-index: 2147483640 !important; }
+.pe-diff-heat { z-index: 2147483641 !important; }
+
+.pe-diff-divider {
+  position: fixed !important;
+  top: 0 !important;
+  height: 100vh !important;
+  width: 14px !important;
+  margin: 0 0 0 -7px !important;
+  cursor: ew-resize !important;
+  pointer-events: auto !important;
+  touch-action: none !important;
+  z-index: 2147483644 !important;
+}
+
+.pe-diff-divider::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  left: 6px !important;
+  width: 2px !important;
+  background: #ff4757 !important;
+  box-shadow: 0 0 0 1px #ffffff !important;
+}
+
+.pe-diff-grip {
+  position: absolute !important;
+  left: 0 !important;
+  top: 50% !important;
+  width: 14px !important;
+  height: 28px !important;
+  margin-top: -14px !important;
+  box-sizing: border-box !important;
+  background: #c0c0c0 !important;
+  border: 1px solid #000000 !important;
+  box-shadow: inset 1px 1px 0 #ffffff !important;
+}
+
+.pe-diff-toolbar {
+  width: 224px !important;
+  top: 16px !important;
+  direction: ltr !important;
+  max-height: calc(100vh - 32px) !important;
+  overflow-y: auto !important;
+  z-index: 2147483646 !important;
+}
+
+.pe-diff-drop {
+  box-sizing: border-box !important;
+  padding: 10px 6px !important;
+  border: 2px dashed #808080 !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-size: 11px !important;
+  text-align: center !important;
+  cursor: pointer !important;
+}
+
+.pe-diff-drop.pe-over {
+  border-color: #000080 !important;
+  background: #e6e6ff !important;
+}
+
+.pe-diff-fileinfo,
+.pe-diff-message,
+.pe-diff-result {
+  font-size: 10px !important;
+  color: #000000 !important;
+  word-break: break-word !important;
+}
+
+.pe-diff-result { font-weight: bold !important; }
+
+.pe-diff-note {
+  font-size: 9px !important;
+  color: #404040 !important;
+}
+
+.pe-diff-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 11px !important;
+  color: #000000 !important;
+}
+
+.pe-diff-row label { color: #000000 !important; font-size: 11px !important; }
+
+.pe-diff-row .pe-paint-slider {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+}
+
+.pe-diff-val {
+  min-width: 32px !important;
+  text-align: right !important;
+}
+
+.pe-diff-num {
+  width: 62px !important;
+  font-size: 11px !important;
+}
+
+.pe-diff-check {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  color: #000000 !important;
+  font-size: 11px !important;
+  cursor: pointer !important;
 }

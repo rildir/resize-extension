@@ -6,11 +6,55 @@
  *  - Registers and handles right-click context menu options
  *  - Manages extension icon badge counter per tab
  *
- * @version 1.5.0
+ * @version 1.6.0
  */
 
+// LOCALES / currentLang are shared with the popup so context-menu titles stay
+// in sync with the language the user picked in Options.
+importScripts('locales.js');
+
+const MENU_ERASE = 'pe-erase';
+const MENU_STRETCH = 'pe-stretch';
+
 // ─── Badge State (per-tab) ────────────────────────────────
-const tabBadgeCounts = new Map();
+// MV3 service workers are torn down after ~30s idle, so an in-memory Map loses
+// every count. storage.session survives the teardown and is cleared on browser
+// exit, which is exactly the lifetime a badge count should have.
+const BADGE_KEY = 'pe_badge_counts';
+
+async function readBadgeCounts() {
+  try {
+    const data = await chrome.storage.session.get(BADGE_KEY);
+    return data[BADGE_KEY] || {};
+  } catch (err) {
+    return {};
+  }
+}
+
+async function writeBadgeCount(tabId, count) {
+  try {
+    const counts = await readBadgeCounts();
+    if (count > 0) {
+      counts[tabId] = count;
+    } else {
+      delete counts[tabId];
+    }
+    await chrome.storage.session.set({ [BADGE_KEY]: counts });
+  } catch (err) {
+    console.error('[PageEraser] Badge state write error:', err);
+  }
+}
+
+async function setBadge(tabId, count) {
+  try {
+    await chrome.action.setBadgeText({
+      text: count > 0 ? String(count) : '',
+      tabId
+    });
+  } catch (err) {
+    // Tab may have been closed between read and write.
+  }
+}
 
 // ─── Storage Migration (sync -> local) ──────────────────────
 async function migrateSyncToLocal() {
@@ -31,19 +75,59 @@ async function migrateSyncToLocal() {
   }
 }
 
-// ─── Context Menu Setup on Install ────────────────────────
-chrome.runtime.onInstalled.addListener(async () => {
-  chrome.contextMenus.create({
-    id: "pe-erase",
-    title: "PageEraser: Erase Element",
-    contexts: ["all"]
-  });
+// ─── Context Menu Setup ───────────────────────────────────
+// Until the user has saved a language, follow the browser the same way the popup
+// and the page tools do (popup.js, content.js): a Turkish browser gets Turkish.
+function browserLang() {
+  try {
+    return String(navigator.language || '').toLowerCase().startsWith('tr') ? 'tr' : 'en';
+  } catch (err) {
+    return 'en';
+  }
+}
 
-  chrome.contextMenus.create({
-    id: "pe-stretch",
-    title: "PageEraser: Stretch Element (Max Width)",
-    contexts: ["all"]
-  });
+async function getLang() {
+  try {
+    const data = await chrome.storage.local.get('pe_lang');
+    return LOCALES[data.pe_lang] ? data.pe_lang : browserLang();
+  } catch (err) {
+    return browserLang();
+  }
+}
+
+/* Rebuilds the two entries. Several things can ask for that within the same
+ * moment (onInstalled, onStartup and a language change on first open), and two
+ * rebuilds running side by side both pass removeAll() and then collide on
+ * "duplicate id". So they take turns: each one starts after the last finished. */
+let contextMenuQueue = Promise.resolve();
+
+function setupContextMenus() {
+  contextMenuQueue = contextMenuQueue.then(buildContextMenus, buildContextMenus);
+  return contextMenuQueue;
+}
+
+async function buildContextMenus() {
+  try {
+    const lang = await getLang();
+    const t = LOCALES[lang];
+
+    // removeAll() first: onInstalled also fires on every extension update, and
+    // create() with an already-registered id throws "duplicate id".
+    await new Promise(resolve => chrome.contextMenus.removeAll(resolve));
+
+    // The callback reads lastError so a failure is logged, not left "unchecked".
+    const made = () => {
+      if (chrome.runtime.lastError) console.warn('[PageEraser] Context menu:', chrome.runtime.lastError.message);
+    };
+    chrome.contextMenus.create({ id: MENU_ERASE, title: t.ctxErase, contexts: ['all'] }, made);
+    chrome.contextMenus.create({ id: MENU_STRETCH, title: t.ctxStretch, contexts: ['all'] }, made);
+  } catch (err) {
+    console.warn('[PageEraser] Context menu setup failed:', err);
+  }
+}
+
+chrome.runtime.onInstalled.addListener(async () => {
+  await setupContextMenus();
 
   // Set default badge style
   chrome.action.setBadgeBackgroundColor({ color: '#008080' });
@@ -52,20 +136,39 @@ chrome.runtime.onInstalled.addListener(async () => {
   await migrateSyncToLocal();
 });
 
+// Context menus are not persisted across browser restarts.
+chrome.runtime.onStartup.addListener(async () => {
+  await setupContextMenus();
+  chrome.action.setBadgeBackgroundColor({ color: '#008080' });
+});
+
+// Re-label the menus when the user switches language in Options.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.pe_lang) {
+    setupContextMenus();
+  }
+});
+
 // ─── Shortcut Commands Listener ──────────────────────────
 chrome.commands.onCommand.addListener(async (command) => {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !tab.id || !tab.url) return;
+    if (!tab || !tab.id) return;
 
-    if (tab.url.startsWith('http')) {
-      if (command === 'start-selection') {
-        chrome.tabs.sendMessage(tab.id, { type: 'START_SELECTION' }).catch(() => {});
-      } else if (command === 'reset-layout') {
-        chrome.tabs.sendMessage(tab.id, { type: 'RESET_SITE' }).catch(() => {});
-      } else if (command === 'start-paint') {
-        chrome.tabs.sendMessage(tab.id, { type: 'START_PAINT' }).catch(() => {});
-      }
+    const messageTypes = {
+      'start-selection': 'START_SELECTION',
+      'reset-layout': 'RESET_SITE',
+      'start-paint': 'START_PAINT',
+      'toggle-xray': 'TOGGLE_XRAY',
+      'toggle-extract': 'TOGGLE_EXTRACT',
+      'toggle-diff': 'TOGGLE_DIFF'
+    };
+
+    const type = messageTypes[command];
+    // No url check needed: the content script only exists on pages we are
+    // allowed to run on, so sendMessage simply rejects everywhere else.
+    if (type) {
+      chrome.tabs.sendMessage(tab.id, { type }).catch(() => {});
     }
   } catch (err) {
     console.error('[PageEraser] Command listener error:', err);
@@ -75,12 +178,12 @@ chrome.commands.onCommand.addListener(async (command) => {
 // ─── Context Menu Click Handler ───────────────────────────
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab || !tab.id) return;
-  
+
   try {
-    if (info.menuItemId === "pe-erase") {
-      chrome.tabs.sendMessage(tab.id, { type: "CONTEXT_ERASE" }).catch(() => {});
-    } else if (info.menuItemId === "pe-stretch") {
-      chrome.tabs.sendMessage(tab.id, { type: "CONTEXT_STRETCH" }).catch(() => {});
+    if (info.menuItemId === MENU_ERASE) {
+      chrome.tabs.sendMessage(tab.id, { type: 'CONTEXT_ERASE' }).catch(() => {});
+    } else if (info.menuItemId === MENU_STRETCH) {
+      chrome.tabs.sendMessage(tab.id, { type: 'CONTEXT_STRETCH' }).catch(() => {});
     }
   } catch (err) {
     console.error('[PageEraser] Context menu handler error:', err);
@@ -93,25 +196,39 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     const tabId = sender.tab.id;
     const count = msg.count || 0;
 
-    tabBadgeCounts.set(tabId, count);
-
-    chrome.action.setBadgeText({
-      text: count > 0 ? String(count) : '',
-      tabId
-    });
+    setBadge(tabId, count);
+    writeBadgeCount(tabId, count);
   }
+});
+
+// ─── Layout X-Ray: screenshot of the visible tab ──────────
+// captureVisibleTab needs no extra permission: activeTab covers it, but only
+// once the user has invoked the extension on that tab (toolbar button, command
+// or context menu). Without that it rejects, and the content script explains.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || msg.type !== 'CAPTURE_TAB') return false;
+
+  const tab = sender.tab;
+  // Only a content script in a tab can ask, and only for the tab in front:
+  // captureVisibleTab shoots whatever is active in the window.
+  if (!tab || !tab.active) {
+    sendResponse({ error: 'Tab is not active' });
+    return false;
+  }
+
+  chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' })
+    .then((dataUrl) => sendResponse({ dataUrl }))
+    .catch((err) => sendResponse({ error: String((err && err.message) || err) }));
+  return true; // answer asynchronously
 });
 
 // ─── Clear badge when tab is closed ───────────────────────
 chrome.tabs.onRemoved.addListener((tabId) => {
-  tabBadgeCounts.delete(tabId);
+  writeBadgeCount(tabId, 0);
 });
 
 // ─── Refresh badge when switching tabs ────────────────────
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  const count = tabBadgeCounts.get(activeInfo.tabId) || 0;
-  chrome.action.setBadgeText({
-    text: count > 0 ? String(count) : '',
-    tabId: activeInfo.tabId
-  });
+  const counts = await readBadgeCounts();
+  await setBadge(activeInfo.tabId, counts[activeInfo.tabId] || 0);
 });

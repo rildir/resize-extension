@@ -14,8 +14,12 @@
 
   /* ─── DOM References ─────────────────────────────────────── */
   const btnSelect     = document.getElementById('btn-select');
+  const btnXray       = document.getElementById('btn-xray');
+  const btnExtract    = document.getElementById('btn-extract');
+  const btnDiff       = document.getElementById('btn-diff');
   const btnReset      = document.getElementById('btn-reset');
   const domainNameEl  = document.getElementById('domain-name');
+  const reachNotice   = document.getElementById('reach-notice');
   const hiddenCountEl = document.getElementById('hidden-count');
   const selectorsList = document.getElementById('selectors-list');
   const filterInput   = document.getElementById('filter-input');
@@ -36,18 +40,9 @@
   let allSelectors = []; // Cache list for live filtering
 
   // ─── Domain Scope Helpers ─────────────────────────────────
-  function getBaseDomain(hostname) {
-    if (!hostname) return '';
-    const parts = hostname.split('.');
-    if (parts.length > 2) {
-      const secondLast = parts[parts.length - 2];
-      if (['com', 'co', 'net', 'org', 'gov', 'edu'].includes(secondLast) && parts.length > 3) {
-        return parts.slice(-3).join('.');
-      }
-      return parts.slice(-2).join('.');
-    }
-    return hostname;
-  }
+  // PE_getBaseDomain lives in shared.js so the content script scopes rules
+  // to exactly the same domain we do here.
+  const getBaseDomain = PE_getBaseDomain;
 
   async function getDomainToUse(hostname) {
     const scopeData = await storage.get('pe_all_subdomains');
@@ -156,18 +151,25 @@
     if (!tab) return;
     activeTabId = tab.id;
 
+    hideReachNotice();
     if (tab.url) {
       const urlObj = new URL(tab.url);
-      if (urlObj.protocol.startsWith('http')) {
+      if (urlObj.protocol.startsWith('http') && !isRestrictedPage(urlObj)) {
         const domainToUse = await getDomainToUse(urlObj.hostname);
         currentDomain = domainToUse;
         domainNameEl.textContent = currentDomain;
         btnSelect.disabled = false;
+        btnXray.disabled = false;
+        btnExtract.disabled = false;
+        btnDiff.disabled = false;
         await refreshSelectorsList();
       } else {
         currentDomain = '';
         domainNameEl.textContent = LOCALES[currentLang].cannotRun;
         btnSelect.disabled = true;
+        btnXray.disabled = true;
+        btnExtract.disabled = true;
+        btnDiff.disabled = true;
         btnReset.disabled = true;
         selectorsList.innerHTML = `<div class="empty-state">${LOCALES[currentLang].noElements}</div>`;
         hiddenCountEl.textContent = '0';
@@ -198,6 +200,40 @@
     });
   }
 
+  /* ─── Starting a mode on the page ────────────────────────── */
+  // Chrome keeps extensions out of its own stores, and an extension that was
+  // just installed or updated has no content script in the tabs that were
+  // already open. Either way nothing answers the message, and closing the popup
+  // straight away would look like the button did nothing.
+  function isRestrictedPage(urlObj) {
+    const host = urlObj.hostname;
+    return host === 'chromewebstore.google.com'
+      || (host === 'chrome.google.com' && urlObj.pathname.startsWith('/webstore'))
+      || (host === 'microsoftedge.microsoft.com' && urlObj.pathname.startsWith('/addons'));
+  }
+
+  function showReachNotice() {
+    reachNotice.textContent = LOCALES[currentLang].reachNotice;
+    reachNotice.hidden = false;
+  }
+
+  function hideReachNotice() {
+    reachNotice.hidden = true;
+  }
+
+  /* Sends a start/toggle message. The popup closes once the page has taken it;
+   * when nothing on the page answered it stays open and says what to do. */
+  async function launchOnTab(message) {
+    const response = await sendMessageToTab(message);
+    if (response === null) {
+      showReachNotice();
+      return false;
+    }
+    hideReachNotice();
+    window.close();
+    return true;
+  }
+
   /* ─── UI Refresh & Filtering ─────────────────────────────── */
   async function refreshSelectorsList() {
     if (!currentDomain) return;
@@ -207,40 +243,61 @@
       const data = await storage.get(key);
       allSelectors = data[key] || [];
 
-      // Update badge count
+      // Update badge count (everything hidden on this site, bin or not)
       hiddenCountEl.textContent = allSelectors.length;
 
       // Update reset button state
       btnReset.disabled = allSelectors.length === 0;
 
       applyFilter();
+      updateRecycleBinIcon();
     } catch (err) {
       console.log('[PageEraser] Status listing selectors:', err);
     }
   }
 
+  /* What the Recycle Bin holds: every rule except those deleted for good. */
+  function binItems() {
+    return allSelectors.filter(itemData => !(itemData && itemData.permanent === true));
+  }
+
+  /* Full while there is something to restore, empty otherwise. */
+  function updateRecycleBinIcon() {
+    const icon = document.getElementById('recycle-bin-icon');
+    if (!icon) return;
+    const full = binItems().length > 0;
+    icon.classList.toggle('full', full);
+    icon.classList.toggle('empty', !full);
+  }
+
   function applyFilter() {
     selectorsList.innerHTML = '';
     const query = filterInput.value.toLowerCase().trim();
-    
-    const filtered = allSelectors.filter(itemData => {
+    const inBin = binItems();
+
+    const filtered = inBin.filter(itemData => {
       const selector = typeof itemData === 'string' ? itemData : itemData.selector;
       return selector.toLowerCase().includes(query);
     });
 
     if (filtered.length === 0) {
-      const msg = allSelectors.length === 0 ? LOCALES[currentLang].noElements : LOCALES[currentLang].noMatches;
+      const msg = inBin.length === 0 ? LOCALES[currentLang].noElements : LOCALES[currentLang].noMatches;
       selectorsList.innerHTML = `<div class="empty-state">${msg}</div>`;
       return;
     }
 
-    filtered.forEach((itemData) => {
+    // Rules that came from someone else's code are listed last, under their own heading.
+    const isImportedRule = (rule) => !!rule && typeof rule === 'object' && rule.imported === true;
+    const ordered = [...filtered.filter((rule) => !isImportedRule(rule)), ...filtered.filter(isImportedRule)];
+    let importedHeadingShown = false;
+
+    ordered.forEach((itemData) => {
       const isString = typeof itemData === 'string';
       const selectorStr = isString ? itemData : itemData.selector;
       const action = isString ? 'hide' : itemData.action;
 
       const item = document.createElement('div');
-      item.className = 'selector-item';
+      item.className = isImportedRule(itemData) ? 'selector-item imported' : 'selector-item';
       item.draggable = true;
 
       item.addEventListener('dragstart', (e) => {
@@ -282,6 +339,12 @@
       restoreBtn.title = currentLang === 'en' ? 'Restore element' : 'Elementi geri yükle';
       restoreBtn.innerHTML = `<span>${LOCALES[currentLang].restoreBtn}</span>`;
 
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'win-btn win-btn-sm';
+      deleteBtn.title = LOCALES[currentLang].deleteForeverBtn;
+      deleteBtn.setAttribute('aria-label', LOCALES[currentLang].deleteForeverBtn);
+      deleteBtn.innerHTML = '<span>✕</span>';
+
       // Inline selector editing logic
       editBtn.addEventListener('click', () => {
         // Toggle item text into an input box
@@ -311,22 +374,36 @@
 
         saveBtn.addEventListener('click', async () => {
           const newSelector = editInput.value.trim();
-          if (!newSelector) {
-            RetroAudio.playError();
+          // Saving without changing the selector (or only its spaces) changes
+          // nothing. It must not go on: the tab would be told to restore the
+          // old selector, and that removes the rule that was just written.
+          if (newSelector === selectorStr) {
+            applyFilter();
             return;
           }
+          // Hand-typed selectors get interpolated into a page stylesheet, so
+          // they go through the same validation as an imported rule.
+          if (!PE_isSafeSelector(newSelector)) {
+            RetroAudio.playError();
+            editInput.classList.add('win-input-invalid');
+            editInput.focus();
+            editInput.select();
+            return;
+          }
+          editInput.classList.remove('win-input-invalid');
 
           RetroAudio.playSelection();
 
-          // 1. Tell tab to restore old selector (clears inline styles and removes from storage)
-          await sendMessageToTab({ type: 'RESTORE_SELECTOR', selector: selectorStr, silent: true });
-
-          // 2. Fetch the updated list from storage (which now has the old selector removed)
+          // 1. Swap the rule in storage right here, as Restore does. Asking the
+          // tab to remove the old one is not enough: a tab that is not
+          // answering (opened before an update) used to leave the old rule in
+          // place next to the new one.
           const key = `pe_selectors_${currentDomain}`;
           const data = await storage.get(key);
-          let selectors = data[key] || [];
-
-          // 3. Add the new selector rule
+          let selectors = (data[key] || []).filter(item => {
+            const sel = typeof item === 'string' ? item : (item && item.selector);
+            return sel !== selectorStr;
+          });
           if (isString) {
             selectors.push(newSelector);
           } else {
@@ -334,7 +411,10 @@
           }
           await storage.set({ [key]: selectors });
 
-          // 4. Tell tab to load and apply the new rules
+          // 2. The tab clears the inline styles the old rule left on the page...
+          await sendMessageToTab({ type: 'RESTORE_SELECTOR', selector: selectorStr, silent: true });
+
+          // 3. ...and loads and applies the new list.
           await sendMessageToTab({ type: 'REFRESH_RULES', silent: true });
 
           await refreshSelectorsList();
@@ -362,14 +442,98 @@
         await refreshSelectorsList();
       });
 
+      // Delete permanently: the rule stays (the element stays hidden) but it
+      // leaves the bin, so it can no longer be restored one by one.
+      deleteBtn.addEventListener('click', async () => {
+        const confirmed = await askConfirm('confirmDeleteTitle', 'confirmDeleteMessage', selectorStr);
+        if (!confirmed) return;
+
+        const key = `pe_selectors_${currentDomain}`;
+        const data = await storage.get(key);
+        const selectors = (data[key] || []).map(rule => {
+          const sel = typeof rule === 'string' ? rule : rule.selector;
+          if (sel !== selectorStr) return rule;
+          return { selector: sel, action: typeof rule === 'string' ? 'hide' : rule.action, permanent: true };
+        });
+        await storage.set({ [key]: selectors });
+
+        RetroAudio.playTrash();
+        await refreshSelectorsList();
+      });
+
       controlsContainer.appendChild(editBtn);
       controlsContainer.appendChild(restoreBtn);
+      controlsContainer.appendChild(deleteBtn);
 
       item.appendChild(actionBadge);
       item.appendChild(text);
       item.appendChild(controlsContainer);
+      if (isImportedRule(itemData) && !importedHeadingShown) {
+        importedHeadingShown = true;
+        selectorsList.appendChild(buildImportedBanner());
+      }
       selectorsList.appendChild(item);
     });
+  }
+
+  /* ─── Imported rules: keep or remove them all in one click ── */
+  function importedRules() {
+    return allSelectors.filter((rule) => rule && typeof rule === 'object' && rule.imported === true && rule.permanent !== true);
+  }
+
+  function buildImportedBanner() {
+    const t = LOCALES[currentLang];
+    const count = importedRules().length;
+    const bar = document.createElement('div');
+    bar.className = 'imported-banner';
+
+    const label = document.createElement('span');
+    label.className = 'imported-banner-text';
+    label.textContent = count === 1 ? t.importedBannerOne : fill(t.importedBanner, { n: count });
+
+    const makeButton = (text, title, handler) => {
+      const button = document.createElement('button');
+      button.className = 'win-btn win-btn-sm';
+      button.type = 'button';
+      button.title = title;
+      const span = document.createElement('span');
+      span.textContent = text;
+      button.appendChild(span);
+      button.addEventListener('click', handler);
+      return button;
+    };
+    bar.appendChild(label);
+    bar.appendChild(makeButton(t.importedKeep, t.importedKeepTitle, keepImported));
+    bar.appendChild(makeButton(t.importedRemove, t.importedRemoveTitle, removeImported));
+    return bar;
+  }
+
+  /* The imported rules become the user's own: same rules, no label. */
+  async function keepImported() {
+    if (!currentDomain) return;
+    const key = `pe_selectors_${currentDomain}`;
+    const data = await storage.get(key);
+    const rules = (data[key] || []).map((rule) => {
+      if (!rule || typeof rule !== 'object' || rule.imported !== true) return rule;
+      const own = { ...rule };
+      delete own.imported;
+      return own;
+    });
+    await storage.set({ [key]: rules });
+    RetroAudio.playSelection();
+    await refreshSelectorsList();
+  }
+
+  /* One click, no questions: the elements come back as soon as the rules go. */
+  async function removeImported() {
+    if (!currentDomain) return;
+    const key = `pe_selectors_${currentDomain}`;
+    const data = await storage.get(key);
+    const rules = (data[key] || []).filter((rule) => !(rule && typeof rule === 'object' && rule.imported === true && rule.permanent !== true));
+    await storage.set({ [key]: rules });
+    await sendMessageToTab({ type: 'REFRESH_RULES', silent: true });
+    RetroAudio.playReset();
+    await refreshSelectorsList();
   }
 
   /* ─── Menu Bar Controls ──────────────────────────────────── */
@@ -385,17 +549,640 @@
       if (!wasVisible) {
         dropdown.classList.add('visible');
         menuItem.classList.add('active');
+        menuItem.setAttribute('aria-expanded', 'true');
       }
     });
   });
 
   function closeAllDropdowns() {
     dropdownMenus.forEach(d => d.classList.remove('visible'));
-    menuItems.forEach(m => m.classList.remove('active'));
+    menuItems.forEach(m => {
+      m.classList.remove('active');
+      m.setAttribute('aria-expanded', 'false');
+    });
   }
 
   document.addEventListener('click', () => {
     closeAllDropdowns();
+  });
+
+  /* ─── Menu Bar: keyboard ──────────────────────────────────
+   * The menus used to answer to the mouse only: Tab skipped them, Enter did
+   * nothing, and everything under File, Options and Help (export and import,
+   * copy as code, language, theme) was out of reach without one.
+   *   menu title : Enter / Space / ↓ open it, ↑ opens it at the last entry,
+   *                ← → move to the next title, Esc closes
+   *   entry      : ↑ ↓ Home End move, Enter / Space choose, ← → change menu,
+   *                Esc closes and returns to the title, Tab leaves
+   *   Alt + the underlined letter opens a menu (the letter follows the language)
+   */
+  const menuBarItems = Array.from(menuItems);
+  const dropdownOf = (menuItem) => menuItem.parentElement.querySelector('.dropdown-menu');
+  const entriesOf = (dropdown) => Array.from(dropdown.querySelectorAll('.dropdown-item'));
+
+  function openMenu(menuItem, focusWhich) {
+    closeAllDropdowns();
+    const dropdown = dropdownOf(menuItem);
+    dropdown.classList.add('visible');
+    menuItem.classList.add('active');
+    menuItem.setAttribute('aria-expanded', 'true');
+    if (focusWhich) {
+      const list = entriesOf(dropdown);
+      const target = focusWhich === 'last' ? list[list.length - 1] : list[0];
+      if (target) target.focus();
+    }
+  }
+
+  function hopMenu(fromItem, step, keepOpen) {
+    const count = menuBarItems.length;
+    const next = menuBarItems[(menuBarItems.indexOf(fromItem) + step + count) % count];
+    if (keepOpen) openMenu(next, 'first'); else next.focus();
+  }
+
+  menuBarItems.forEach((menuItem) => {
+    menuItem.addEventListener('keydown', (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      const isOpen = menuItem.classList.contains('active');
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') openMenu(menuItem, 'first');
+      else if (e.key === 'ArrowUp') openMenu(menuItem, 'last');
+      else if (e.key === 'ArrowRight') hopMenu(menuItem, 1, isOpen);
+      else if (e.key === 'ArrowLeft') hopMenu(menuItem, -1, isOpen);
+      else if (e.key === 'Escape') closeAllDropdowns();
+      else return;
+      e.preventDefault();
+    });
+  });
+
+  dropdownMenus.forEach((dropdown) => {
+    const owner = dropdown.parentElement.querySelector('.menu-item');
+
+    dropdown.addEventListener('keydown', (e) => {
+      const entry = e.target.closest ? e.target.closest('.dropdown-item') : null;
+      if (!entry || e.altKey || e.ctrlKey || e.metaKey) return;
+      const list = entriesOf(dropdown);
+      const at = list.indexOf(entry);
+      switch (e.key) {
+        case 'ArrowDown': list[(at + 1) % list.length].focus(); break;
+        case 'ArrowUp': list[(at - 1 + list.length) % list.length].focus(); break;
+        case 'Home': list[0].focus(); break;
+        case 'End': list[list.length - 1].focus(); break;
+        case 'ArrowRight': hopMenu(owner, 1, true); break;
+        case 'ArrowLeft': hopMenu(owner, -1, true); break;
+        case 'Escape': closeAllDropdowns(); owner.focus(); break;
+        case 'Tab': closeAllDropdowns(); return; // let Tab carry on from here
+        case 'Enter':
+        case ' ': entry.click(); break;
+        default: return;
+      }
+      e.preventDefault();
+    });
+
+    // Choosing an entry that closes the menu hands focus back to the menu
+    // title first: a dialog it opens then remembers a visible place to return
+    // to (the entry itself is about to disappear). Capture phase, so this runs
+    // before the entry's own handler.
+    dropdown.addEventListener('click', (e) => {
+      const entry = e.target.closest ? e.target.closest('.dropdown-item') : null;
+      if (entry && !entry.classList.contains('checkable')) owner.focus();
+    }, true);
+  });
+
+  // Checkable entries say whether they are on, for screen readers.
+  document.querySelectorAll('.dropdown-item[aria-checked]').forEach((entry) => {
+    const sync = () => entry.setAttribute('aria-checked', entry.classList.contains('checked') ? 'true' : 'false');
+    sync();
+    new MutationObserver(sync).observe(entry, { attributes: true, attributeFilter: ['class'] });
+  });
+
+  const dialogIsOpen = () => Array.from(
+    document.querySelectorAll('.win-modal-overlay, .win-overlay, .win-tour-overlay, #bsod-overlay')
+  ).some((overlay) => window.getComputedStyle(overlay).display !== 'none');
+
+  document.addEventListener('keydown', (e) => {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
+    const letter = String(e.key || '').toLowerCase();
+    const target = menuBarItems.find((menuItem) => {
+      const mark = menuItem.querySelector('.underline');
+      return mark && mark.textContent.trim().toLowerCase() === letter;
+    });
+    if (!target || dialogIsOpen()) return;
+    e.preventDefault();
+    openMenu(target, 'first');
+  });
+
+  /* About and Minesweeper were plain overlays: no dialog role, Tab walked out
+   * to the page behind and Esc did nothing. They get what the other dialogs
+   * have: focus moves in, Tab stays inside, Esc closes, focus goes back to
+   * where it came from. Several files show them through style.display, so the
+   * overlay is watched instead of every caller being changed. */
+  function makeDialogKeyboardFriendly(overlay, closeButton) {
+    if (!overlay || !closeButton) return;
+    let before = null;
+    let wasOpen = false;
+    const isOpen = () => overlay.style.display !== '' && overlay.style.display !== 'none';
+    const focusables = () => Array.from(
+      overlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    ).filter((el) => !el.disabled && el.getClientRects().length > 0);
+
+    new MutationObserver(() => {
+      const open = isOpen();
+      if (open && !wasOpen) {
+        before = document.activeElement;
+        (focusables()[0] || closeButton).focus();
+      } else if (!open && wasOpen) {
+        if (before && typeof before.focus === 'function' && document.contains(before)) before.focus();
+        before = null;
+      }
+      wasOpen = open;
+    }).observe(overlay, { attributes: true, attributeFilter: ['style'] });
+
+    overlay.addEventListener('keydown', (e) => {
+      if (!isOpen()) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeButton.click();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (!overlay.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
+  }
+
+  makeDialogKeyboardFriendly(aboutOverlay, btnCloseAbout);
+  makeDialogKeyboardFriendly(document.getElementById('minesweeper-overlay'), document.getElementById('btn-close-minesweeper'));
+
+  /* ─── Alert Dialog ───────────────────────────────────────── */
+  const alertOverlay = document.getElementById('alert-overlay');
+  const alertTitleEl = document.getElementById('alert-title');
+  const alertMessageEl = document.getElementById('alert-message');
+  const alertIconEl = document.getElementById('alert-icon');
+  const alertOkBtn = document.getElementById('btn-ok-alert');
+  let alertPreviousFocus = null;
+
+  function showAlert(titleKey, messageKey, icon = 'ℹ️') {
+    const t = LOCALES[currentLang];
+    alertTitleEl.textContent = t[titleKey] || titleKey;
+    alertMessageEl.textContent = t[messageKey] || messageKey;
+    alertIconEl.textContent = icon;
+    alertPreviousFocus = document.activeElement;
+    alertOverlay.style.display = 'flex';
+    alertOkBtn.focus();
+  }
+
+  function hideAlert() {
+    alertOverlay.style.display = 'none';
+    // Return focus where the user left it, rather than dumping it on <body>.
+    if (alertPreviousFocus && alertPreviousFocus.focus) alertPreviousFocus.focus();
+    alertPreviousFocus = null;
+  }
+
+  function isAlertOpen() {
+    return alertOverlay.style.display === 'flex';
+  }
+
+  alertOkBtn.addEventListener('click', () => {
+    RetroAudio.playSelection();
+    hideAlert();
+  });
+  document.getElementById('btn-close-alert').addEventListener('click', hideAlert);
+
+  // A modal has to be operable from the keyboard, and must not let focus
+  // wander into the page behind it. Capture phase so it wins over the
+  // shortcut handlers registered further down.
+  document.addEventListener('keydown', (e) => {
+    if (!isAlertOpen()) return;
+    if (e.key === 'Escape' || e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      hideAlert();
+    } else if (e.key === 'Tab') {
+      // Only one focusable control in this dialog, so the trap is simply
+      // "keep it here".
+      e.preventDefault();
+      alertOkBtn.focus();
+    }
+  }, true);
+
+  /* ─── Confirm Dialog ─────────────────────────────────────── */
+  const confirmOverlay = document.getElementById('confirm-overlay');
+  const confirmTitleEl = document.getElementById('confirm-title');
+  const confirmMessageEl = document.getElementById('confirm-message');
+  const confirmDetailEl = document.getElementById('confirm-detail');
+  const confirmYesBtn = document.getElementById('btn-yes-confirm');
+  const confirmNoBtn = document.getElementById('btn-no-confirm');
+  let confirmResolve = null;
+  let confirmPreviousFocus = null;
+
+  function isConfirmOpen() {
+    return confirmOverlay.style.display === 'flex';
+  }
+
+  /* Resolves true on Yes, false on No / Esc / the close button. Focus starts
+   * on No, so a stray Enter can never delete anything. */
+  function askConfirm(titleKey, messageKey, detail = '') {
+    const t = LOCALES[currentLang];
+    confirmTitleEl.textContent = t[titleKey] || titleKey;
+    confirmMessageEl.textContent = t[messageKey] || messageKey;
+    confirmDetailEl.textContent = detail;
+    confirmDetailEl.title = detail;
+    confirmPreviousFocus = document.activeElement;
+    confirmOverlay.style.display = 'flex';
+    confirmNoBtn.focus();
+    return new Promise((resolve) => {
+      confirmResolve = resolve;
+    });
+  }
+
+  function closeConfirm(result) {
+    confirmOverlay.style.display = 'none';
+    if (confirmPreviousFocus && confirmPreviousFocus.focus) confirmPreviousFocus.focus();
+    confirmPreviousFocus = null;
+    const resolve = confirmResolve;
+    confirmResolve = null;
+    if (resolve) resolve(result);
+  }
+
+  confirmYesBtn.addEventListener('click', () => closeConfirm(true));
+  confirmNoBtn.addEventListener('click', () => closeConfirm(false));
+  document.getElementById('btn-close-confirm').addEventListener('click', () => closeConfirm(false));
+
+  // Same rules as the alert dialog: operable from the keyboard, focus kept
+  // inside, capture phase so it wins over the shortcut handlers below.
+  document.addEventListener('keydown', (e) => {
+    if (!isConfirmOpen()) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeConfirm(false);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      (document.activeElement === confirmNoBtn ? confirmYesBtn : confirmNoBtn).focus();
+    } else if (e.key === 'Enter') {
+      // Let the focused button handle it; just keep it from reaching the rest.
+      e.stopPropagation();
+    }
+  }, true);
+
+  /* ─── Import / Export Rules ──────────────────────────────── */
+  const BACKUP_FORMAT = 'PageEraser-rules';
+  const BACKUP_VERSION = 1;
+  const SELECTOR_KEY_PREFIX = 'pe_selectors_';
+
+  async function exportRules() {
+    try {
+      const all = await storage.get(null);
+      const rules = {};
+      let ruleCount = 0;
+
+      Object.keys(all).forEach(key => {
+        if (!key.startsWith(SELECTOR_KEY_PREFIX)) return;
+        const normalized = PE_normalizeRules(all[key]);
+        if (normalized.length === 0) return;
+        rules[key.slice(SELECTOR_KEY_PREFIX.length)] = normalized;
+        ruleCount += normalized.length;
+      });
+
+      if (ruleCount === 0) {
+        RetroAudio.playError();
+        showAlert('exportFailedTitle', 'exportEmptyMsg', '⚠️');
+        return;
+      }
+
+      const backup = {
+        format: BACKUP_FORMAT,
+        version: BACKUP_VERSION,
+        exportedAt: new Date().toISOString(),
+        rules
+      };
+
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: 'application/json'
+      });
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().slice(0, 10);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pageeraser-rules-${stamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Give the download a tick to start before the blob is released.
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+      RetroAudio.playSelection();
+      showAlert('exportSuccessTitle', 'exportSuccessMsg', '💾');
+    } catch (err) {
+      console.error('[PageEraser] Export failed:', err);
+      RetroAudio.playError();
+      showAlert('exportFailedTitle', 'exportFailedMsg', '❌');
+    }
+  }
+
+  function parseBackup(text) {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (parsed.format !== BACKUP_FORMAT) return null;
+    if (!parsed.rules || typeof parsed.rules !== 'object') return null;
+
+    const clean = {};
+    let ruleCount = 0;
+    let rawCount = 0;
+
+    // Counted before any rule is checked: validating 100 000 selectors is what
+    // used to freeze the popup.
+    const domains = Object.keys(parsed.rules);
+    if (domains.length > PE_BACKUP_MAX_RULES_TOTAL) return null;
+    for (const domain of domains) {
+      const list = parsed.rules[domain];
+      if (Array.isArray(list)) {
+        if (list.length > PE_BACKUP_MAX_RULES_PER_SITE) return null;
+        rawCount += list.length;
+        if (rawCount > PE_BACKUP_MAX_RULES_TOTAL) return null;
+      }
+    }
+
+    domains.forEach(domain => {
+      // Domains become storage keys and scope which sites a rule touches, so
+      // only accept something that actually looks like a hostname.
+      if (typeof domain !== 'string' || domain.length > 253) return;
+      if (!/^[a-z0-9.-]+$/i.test(domain)) return;
+
+      const normalized = PE_normalizeRules(parsed.rules[domain]);
+      if (normalized.length === 0) return;
+      clean[domain] = normalized;
+      ruleCount += normalized.length;
+    });
+
+    return ruleCount > 0 ? clean : null;
+  }
+
+  async function importRules(file) {
+    try {
+      // Refused by size before the file is even read into memory.
+      if (!file || file.size > PE_BACKUP_MAX_BYTES) {
+        RetroAudio.playError();
+        showAlert('importFailedTitle', 'importFailedMsg', '❌');
+        return;
+      }
+      const text = await file.text();
+      const incoming = parseBackup(text);
+
+      if (!incoming) {
+        RetroAudio.playError();
+        showAlert('importFailedTitle', 'importFailedMsg', '❌');
+        return;
+      }
+
+      // Merge rather than replace: an import should never silently wipe rules
+      // for sites the backup does not mention.
+      const domains = Object.keys(incoming);
+      const keys = domains.map(d => SELECTOR_KEY_PREFIX + d);
+      const existing = await storage.get(keys);
+
+      const toSave = {};
+      let added = 0;
+
+      domains.forEach(domain => {
+        const key = SELECTOR_KEY_PREFIX + domain;
+        const current = PE_normalizeRules(existing[key] || []);
+        const merged = PE_normalizeRules([...current, ...incoming[domain]]);
+        added += merged.length - current.length;
+        toSave[key] = merged;
+      });
+
+      await storage.set(toSave);
+      await sendMessageToTab({ type: 'REFRESH_RULES', silent: true });
+      await refreshSelectorsList();
+
+      RetroAudio.playSelection();
+      showAlert('importSuccessTitle', 'importSuccessMsg', '✔️');
+      console.log(`[PageEraser] Imported ${added} new rule(s) across ${domains.length} domain(s).`);
+    } catch (err) {
+      console.error('[PageEraser] Import failed:', err);
+      RetroAudio.playError();
+      showAlert('importFailedTitle', 'importFailedMsg', '❌');
+    }
+  }
+
+  /* ─── Share rules as a code / Import from a code ──────────── */
+  // "{n} rules for {site}" -> text. Used on locale strings only.
+  function fill(template, values) {
+    return template.replace(/\{(\w+)\}/g, (match, name) => (name in values ? String(values[name]) : match));
+  }
+
+  /* navigator.clipboard where the browser lets the popup use it, otherwise a
+   * throwaway <textarea> and execCommand('copy'). Resolves true when copied. */
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (err) {
+      // Fall through to the textarea route.
+    }
+    try {
+      const box = document.createElement('textarea');
+      box.value = text;
+      box.setAttribute('readonly', '');
+      box.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(box);
+      box.select();
+      const copied = document.execCommand('copy');
+      box.remove();
+      return copied;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  async function copyRulesAsCode() {
+    const fail = (messageKey, titleKey = 'codeCopyFailedTitle') => {
+      RetroAudio.playError();
+      showAlert(titleKey, messageKey, '⚠️');
+    };
+    if (!currentDomain) return fail('codeNoSiteMsg');
+    const key = `pe_selectors_${currentDomain}`;
+    const data = await storage.get(key);
+    const rules = PE_normalizeRules(data[key] || []);
+    if (rules.length === 0) return fail('codeNothingMsg');
+    const code = PE_buildShare(currentDomain, rules);
+    if (!code) return fail('codeTooBigMsg');
+    if (await copyText(code)) {
+      RetroAudio.playSelection();
+      showAlert('codeCopiedTitle', 'codeCopiedMsg', '📋');
+    } else {
+      fail('codeCopyFailedMsg');
+    }
+  }
+
+  const codeOverlay = document.getElementById('code-overlay');
+  const codeInput = document.getElementById('code-input');
+  const codePreview = document.getElementById('code-preview');
+  const codeAddBtn = document.getElementById('btn-add-code');
+  const codeCancelBtn = document.getElementById('btn-cancel-code');
+  const codeCloseBtn = document.getElementById('btn-close-code');
+  const CODE_PREVIEW_ROWS = 5;
+  // Why PE_parseShare said no -> the sentence that explains it.
+  const CODE_ERRORS = {
+    empty: 'codeHint',
+    size: 'codeErrSize',
+    format: 'codeErrFormat',
+    version: 'codeErrVersion',
+    decode: 'codeErrDecode',
+    domain: 'codeErrDomain',
+    'too-many': 'codeErrTooMany',
+    rules: 'codeErrRules'
+  };
+  let codeParsed = null;
+  let codePreviousFocus = null;
+
+  function isCodeOpen() {
+    return codeOverlay.style.display === 'flex';
+  }
+
+  function openCodeDialog() {
+    codeInput.value = '';
+    renderCodePreview();
+    codePreviousFocus = document.activeElement;
+    codeOverlay.style.display = 'flex';
+    codeInput.focus();
+  }
+
+  function closeCodeDialog() {
+    codeOverlay.style.display = 'none';
+    codeInput.value = '';
+    codeParsed = null;
+    if (codePreviousFocus && codePreviousFocus.focus) codePreviousFocus.focus();
+    codePreviousFocus = null;
+  }
+
+  /* What the pasted code holds, before anything is added. Everything that comes
+   * from the code is put in with textContent: it is someone else's text. */
+  function renderCodePreview() {
+    const t = LOCALES[currentLang];
+    const addLine = (className, text, title) => {
+      const line = document.createElement('div');
+      line.className = className;
+      line.textContent = text;
+      if (title) line.title = title;
+      codePreview.appendChild(line);
+    };
+    codePreview.textContent = '';
+    codeParsed = null;
+    codeAddBtn.disabled = true;
+
+    if (!codeInput.value.trim()) {
+      addLine('code-hint', t.codeHint);
+      return;
+    }
+    const result = PE_parseShare(codeInput.value);
+    if (!result.ok) {
+      addLine('code-error', t[CODE_ERRORS[result.reason]] || t.codeErrDecode);
+      return;
+    }
+    codeParsed = result;
+    addLine('code-summary', result.rules.length === 1
+      ? fill(t.codeSummaryOne, { site: result.domain })
+      : fill(t.codeSummary, { n: result.rules.length, site: result.domain }));
+    result.rules.slice(0, CODE_PREVIEW_ROWS).forEach((rule) => {
+      addLine(`selector-text text-${rule.action}`, `${rule.action === 'stretch' ? '↔' : '✕'} ${rule.selector}`, rule.selector);
+    });
+    if (result.rules.length > CODE_PREVIEW_ROWS) {
+      addLine('code-more', fill(t.codeMore, { n: result.rules.length - CODE_PREVIEW_ROWS }));
+    }
+    if (result.skipped > 0) addLine('code-skipped', fill(t.codeSkipped, { n: result.skipped }));
+    codeAddBtn.disabled = false;
+  }
+
+  /* Merges the rules into the site's list. Rules you already have stay yours;
+   * the new ones are marked imported. */
+  async function addSharedRules() {
+    if (!codeParsed) return;
+    const { domain, rules } = codeParsed;
+    codeAddBtn.disabled = true;
+    try {
+      // The same scope rule as everywhere else: with "all subdomains" on, a rule
+      // for www.example.com is kept under example.com.
+      const site = await getDomainToUse(domain);
+      const key = SELECTOR_KEY_PREFIX + site;
+      const data = await storage.get(key);
+      const current = PE_normalizeRules(data[key] || []);
+      const merged = PE_normalizeRules([...current, ...rules]);
+      const added = merged.length - current.length;
+      await storage.set({ [key]: merged });
+      closeCodeDialog();
+      await sendMessageToTab({ type: 'REFRESH_RULES', silent: true });
+      await refreshSelectorsList();
+
+      const t = LOCALES[currentLang];
+      let message = added === 0
+        ? fill(t.codeAddedNone, { site })
+        : (added === 1 ? fill(t.codeAddedMsgOne, { site }) : fill(t.codeAddedMsg, { n: added, site }));
+      if (added > 0 && site !== currentDomain) message += ' ' + fill(t.codeAddedElsewhere, { site });
+      RetroAudio.playSelection();
+      showAlert('codeAddedTitle', message, '✔️');
+    } catch (err) {
+      console.error('[PageEraser] Adding shared rules failed:', err);
+      closeCodeDialog();
+      RetroAudio.playError();
+      showAlert('importFailedTitle', 'codeAddFailedMsg', '❌');
+    }
+  }
+
+  codeInput.addEventListener('input', renderCodePreview);
+  codeAddBtn.addEventListener('click', addSharedRules);
+  codeCancelBtn.addEventListener('click', closeCodeDialog);
+  codeCloseBtn.addEventListener('click', closeCodeDialog);
+  document.getElementById('menu-item-copycode').addEventListener('click', copyRulesAsCode);
+  document.getElementById('menu-item-importcode').addEventListener('click', openCodeDialog);
+
+  // Same keyboard rules as the other dialogs: Esc closes, Tab stays inside.
+  document.addEventListener('keydown', (e) => {
+    if (!isCodeOpen() || isAlertOpen() || isConfirmOpen()) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeCodeDialog();
+    } else if (e.key === 'Tab') {
+      const stops = [codeInput, codeAddBtn, codeCancelBtn, codeCloseBtn].filter((el) => !el.disabled);
+      const at = stops.indexOf(document.activeElement);
+      const next = e.shiftKey ? stops[(at <= 0 ? stops.length : at) - 1] : stops[(at + 1) % stops.length];
+      e.preventDefault();
+      next.focus();
+    }
+  }, true);
+
+  const importFileInput = document.getElementById('import-file-input');
+
+  document.getElementById('menu-item-export').addEventListener('click', () => {
+    closeAllDropdowns();
+    exportRules();
+  });
+
+  document.getElementById('menu-item-import').addEventListener('click', () => {
+    closeAllDropdowns();
+    importFileInput.click();
+  });
+
+  importFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    // Reset first so picking the same file twice still fires a change event.
+    e.target.value = '';
+    if (file) await importRules(file);
   });
 
   // Dropdown Action Bindings
@@ -405,8 +1192,7 @@
 
   document.getElementById('menu-item-select').addEventListener('click', async () => {
     RetroAudio.playSelection();
-    await sendMessageToTab({ type: 'START_SELECTION', silent: true });
-    window.close();
+    await launchOnTab({ type: 'START_SELECTION', silent: true });
   });
 
   document.getElementById('menu-item-reset').addEventListener('click', async (e) => {
@@ -600,7 +1386,10 @@
     elements.forEach(el => {
       const key = el.getAttribute('data-i18n');
       if (LOCALES[currentLang] && LOCALES[currentLang][key] !== undefined) {
-        el.innerHTML = LOCALES[currentLang][key];
+        // {version} is filled from the manifest so the About box can never
+        // drift out of sync with the released version again.
+        el.innerHTML = LOCALES[currentLang][key]
+          .replace('{version}', chrome.runtime.getManifest().version);
       }
     });
 
@@ -610,6 +1399,28 @@
       const key = input.getAttribute('data-i18n-placeholder');
       if (LOCALES[currentLang] && LOCALES[currentLang][key] !== undefined) {
         input.placeholder = LOCALES[currentLang][key];
+      }
+    });
+
+    // A minimised window shows its title with a suffix: keep it in the new language.
+    const windowForTitle = document.querySelector('.window');
+    const mainTitle = document.querySelector('.window > .title-bar .title-bar-text');
+    if (windowForTitle && mainTitle && windowForTitle.classList.contains('minimized') &&
+        LOCALES[currentLang] && LOCALES[currentLang].minimizedTitle) {
+      mainTitle.textContent = LOCALES[currentLang].minimizedTitle;
+    }
+
+    // Translate aria-label and title attributes
+    document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+      const key = el.getAttribute('data-i18n-aria-label');
+      if (LOCALES[currentLang] && LOCALES[currentLang][key] !== undefined) {
+        el.setAttribute('aria-label', LOCALES[currentLang][key]);
+      }
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+      const key = el.getAttribute('data-i18n-title');
+      if (LOCALES[currentLang] && LOCALES[currentLang][key] !== undefined) {
+        el.title = LOCALES[currentLang][key];
       }
     });
 
@@ -677,8 +1488,7 @@
   /* ─── Main Action Elements ───────────────────────────────── */
   btnSelect.addEventListener('click', async () => {
     RetroAudio.playSelection();
-    await sendMessageToTab({ type: 'START_SELECTION', silent: true });
-    window.close();
+    await launchOnTab({ type: 'START_SELECTION', silent: true });
   });
 
   btnReset.addEventListener('click', async () => {
@@ -744,7 +1554,7 @@
 
     if (isMinimized) {
       windowEl.classList.add('minimized');
-      titleText.textContent = 'PageEraser.exe — [Minimized]';
+      titleText.textContent = LOCALES[currentLang].minimizedTitle;
     } else {
       windowEl.classList.remove('minimized');
       titleText.textContent = 'PageEraser.exe';
@@ -759,7 +1569,7 @@
 
     if (isMinimized) {
       windowEl.classList.add('minimized');
-      titleText.textContent = 'PageEraser.exe — [Minimized]';
+      titleText.textContent = LOCALES[currentLang].minimizedTitle;
     } else {
       windowEl.classList.remove('minimized');
       titleText.textContent = 'PageEraser.exe';
@@ -783,13 +1593,40 @@
     ClippyAssistant.handleHover('maximizeDeny');
   });
 
+  // ─── Layout X-Ray ──────────────────────────────────────────
+  // Starting it from here (toolbar button) is what grants the extension
+  // activeTab on this page, which the overlay's Capture button relies on.
+  async function toggleXray() {
+    RetroAudio.playSelection();
+    await launchOnTab({ type: 'TOGGLE_XRAY' });
+  }
+  btnXray.addEventListener('click', toggleXray);
+  document.getElementById('menu-item-xray').addEventListener('click', toggleXray);
+
+  // ─── Extract to Code ───────────────────────────────────────
+  async function toggleExtract() {
+    RetroAudio.playSelection();
+    await launchOnTab({ type: 'TOGGLE_EXTRACT' });
+  }
+  btnExtract.addEventListener('click', toggleExtract);
+  document.getElementById('menu-item-extract').addEventListener('click', toggleExtract);
+
+  // ─── Visual Diff ───────────────────────────────────────────
+  // Started from here (toolbar button), the extension holds activeTab for this
+  // page, which the Compare button needs to capture it.
+  async function toggleDiff() {
+    RetroAudio.playSelection();
+    await launchOnTab({ type: 'TOGGLE_DIFF' });
+  }
+  btnDiff.addEventListener('click', toggleDiff);
+  document.getElementById('menu-item-diff').addEventListener('click', toggleDiff);
+
   // ─── Paint Webpage Actions Menu Trigger ────────────────────
   const paintBtn = document.getElementById('menu-item-paint');
   if (paintBtn) {
     paintBtn.addEventListener('click', async () => {
       RetroAudio.playSelection();
-      await sendMessageToTab({ type: 'START_PAINT' });
-      window.close();
+      await launchOnTab({ type: 'START_PAINT' });
     });
   }
 
@@ -816,6 +1653,7 @@
 
   if (btnCloseSoundboard) btnCloseSoundboard.addEventListener('click', hideSoundboard);
   if (btnOkSoundboard) btnOkSoundboard.addEventListener('click', hideSoundboard);
+  makeDialogKeyboardFriendly(overlaySoundboard, btnCloseSoundboard);
 
   soundItems.forEach(item => {
     item.addEventListener('click', () => {
@@ -914,7 +1752,6 @@
 
   // ─── Recycle Bin Drag & Drop Listeners ────────────────────
   const recycleBin = document.getElementById('recycle-bin-container');
-  const recycleBinIcon = document.getElementById('recycle-bin-icon');
 
   if (recycleBin) {
     recycleBin.addEventListener('dragover', (e) => {
@@ -936,10 +1773,6 @@
       // Play trash crumpling audio
       RetroAudio.playTrash();
 
-      // Show full recycle bin icon state
-      recycleBinIcon.classList.remove('empty');
-      recycleBinIcon.classList.add('full');
-
       // Update storage and notify tab
       const key = `pe_selectors_${currentDomain}`;
       const data = await storage.get(key);
@@ -951,13 +1784,8 @@
       await storage.set({ [key]: selectors });
 
       await sendMessageToTab({ type: 'RESTORE_SELECTOR', selector: selectorStr, silent: true });
+      // The refresh also redraws the bin: empty once the last item is gone.
       await refreshSelectorsList();
-
-      // Revert bin icon back to empty after a delay
-      setTimeout(() => {
-        recycleBinIcon.classList.remove('full');
-        recycleBinIcon.classList.add('empty');
-      }, 1500);
     });
 
     // Double-click Recycle Bin to Empty/Reset

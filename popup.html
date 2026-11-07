@@ -13,17 +13,17 @@
         <div class="title-bar-text">PageEraser.exe</div>
         <div class="title-bar-controls">
           <button
-            aria-label="Minimize"
+            aria-label="Minimize" data-i18n-aria-label="minimizeAria"
             class="win-btn-control minimize-btn"
             type="button"
           ></button>
           <button
-            aria-label="Maximize"
+            aria-label="Maximize" data-i18n-aria-label="maximizeAria"
             class="win-btn-control maximize-btn"
             type="button"
           ></button>
           <button
-            aria-label="Close"
+            aria-label="Close" data-i18n-aria-label="closeAria"
             class="win-btn-control close-btn"
             type="button"
           ></button>
@@ -31,134 +31,156 @@
       </div>
 
       <!-- Menu Bar with Dropdowns -->
-      <div class="menu-bar">
-        <div class="menu-item-container">
-          <div class="menu-item" id="menu-file" data-i18n="fileMenu">
+      <div class="menu-bar" role="menubar">
+        <div class="menu-item-container" role="none">
+          <div class="menu-item" id="menu-file" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="dropdown-file" data-i18n="fileMenu">
             <span class="underline">F</span>ile
           </div>
-          <div class="dropdown-menu" id="dropdown-file">
+          <div class="dropdown-menu" id="dropdown-file" role="menu" aria-labelledby="menu-file">
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-export"
               data-i18n="exportRules"
             >
               Export Rules...
             </div>
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-import"
               data-i18n="importRules"
             >
               Import Rules...
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item" id="menu-item-exit" data-i18n="exit">
+            <div
+              class="dropdown-item" role="menuitem" tabindex="-1"
+              id="menu-item-copycode"
+              data-i18n="copyCodeMenu"
+            >
+              Copy Rules as Code
+            </div>
+            <div
+              class="dropdown-item" role="menuitem" tabindex="-1"
+              id="menu-item-importcode"
+              data-i18n="importCodeMenu"
+            >
+              Import from Code...
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-exit" data-i18n="exit">
               Exit
             </div>
           </div>
         </div>
-        <div class="menu-item-container">
-          <div class="menu-item" id="menu-actions" data-i18n="actionsMenu">
+        <div class="menu-item-container" role="none">
+          <div class="menu-item" id="menu-actions" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="dropdown-actions" data-i18n="actionsMenu">
             <span class="underline">A</span>ctions
           </div>
-          <div class="dropdown-menu" id="dropdown-actions">
-            <div
-              class="dropdown-item"
-              id="menu-item-select"
-            >
+          <div class="dropdown-menu" id="dropdown-actions" role="menu" aria-labelledby="menu-actions">
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-select">
               <span data-i18n="startSelection">Start Selection</span>
               <span class="menu-shortcut">Alt+Shift+E</span>
             </div>
-            <div
-              class="dropdown-item"
-              id="menu-item-reset"
-            >
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-reset">
               <span data-i18n="restoreLayout">Restore All Layout</span>
               <span class="menu-shortcut">Alt+Shift+D</span>
             </div>
             <div class="dropdown-divider"></div>
-            <div
-              class="dropdown-item"
-              id="menu-item-paint"
-            >
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-paint">
               <span data-i18n="paintWebpage">Paint Webpage</span>
               <span class="menu-shortcut">Alt+Shift+W</span>
             </div>
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-xray">
+              <span data-i18n="xrayBtn">Layout X-Ray</span>
+              <span class="menu-shortcut">Alt+Shift+X</span>
+            </div>
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-extract">
+              <span data-i18n="extractBtn">Extract to Code</span>
+              <span class="menu-shortcut">Alt+Shift+C</span>
+            </div>
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-diff">
+              <span data-i18n="diffBtn">Visual Diff</span>
+              <span class="menu-shortcut">Alt+Shift+V</span>
+            </div>
           </div>
         </div>
-        <div class="menu-item-container">
-          <div class="menu-item" id="menu-options" data-i18n="optionsMenu">
+        <div class="menu-item-container" role="none">
+          <div class="menu-item" id="menu-options" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="dropdown-options" data-i18n="optionsMenu">
             <span class="underline">O</span>ptions
           </div>
-          <div class="dropdown-menu" id="dropdown-options">
-            <div class="dropdown-item checkable checked" id="menu-item-sounds">
+          <div class="dropdown-menu" id="dropdown-options" role="menu" aria-labelledby="menu-options">
+            <div class="dropdown-item checkable checked" role="menuitemcheckbox" aria-checked="true" tabindex="-1" id="menu-item-sounds">
               <span class="check-mark">✓</span>
               <span data-i18n="playSounds">Play Retro Sounds</span>
             </div>
             <div
-              class="dropdown-item checkable checked"
+              class="dropdown-item checkable checked" role="menuitemcheckbox" aria-checked="true" tabindex="-1"
               id="menu-item-clippy-toggle"
             >
               <span class="check-mark">✓</span>
               <span data-i18n="showClippy">Show Clippy Buddy</span>
             </div>
-            <div class="dropdown-item checkable" id="menu-item-scope">
+            <div class="dropdown-item checkable" role="menuitemcheckbox" aria-checked="false" tabindex="-1" id="menu-item-scope">
               <span class="check-mark">✓</span>
               <span data-i18n="allSubdomains">Apply to Subdomains</span>
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item checkable" id="menu-item-theme-teal">
+            <div class="dropdown-item checkable" role="menuitemradio" aria-checked="false" tabindex="-1" id="menu-item-theme-teal">
               <span class="check-mark">✓</span>
               <span data-i18n="classicTeal">Classic Teal</span>
             </div>
-            <div class="dropdown-item checkable" id="menu-item-theme-blue">
+            <div class="dropdown-item checkable" role="menuitemradio" aria-checked="false" tabindex="-1" id="menu-item-theme-blue">
               <span class="check-mark">✓</span>
               <span data-i18n="classicBlue">Classic Blue</span>
             </div>
-            <div class="dropdown-item checkable" id="menu-item-theme-plum">
+            <div class="dropdown-item checkable" role="menuitemradio" aria-checked="false" tabindex="-1" id="menu-item-theme-plum">
               <span class="check-mark">✓</span>
               <span data-i18n="plumTheme">Plum Theme</span>
             </div>
-            <div class="dropdown-item checkable" id="menu-item-contrast-high">
+            <div class="dropdown-item checkable" role="menuitemcheckbox" aria-checked="false" tabindex="-1" id="menu-item-contrast-high">
               <span class="check-mark">✓</span>
               <span data-i18n="contrastHigh">High Contrast</span>
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item checkable" id="menu-item-text-large">
+            <div class="dropdown-item checkable" role="menuitemcheckbox" aria-checked="false" tabindex="-1" id="menu-item-text-large">
               <span class="check-mark">✓</span>
               <span data-i18n="textLarge">Large Text</span>
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item checkable" id="menu-item-lang-en">
+            <div class="dropdown-item checkable" role="menuitemradio" aria-checked="false" tabindex="-1" id="menu-item-lang-en">
               <span class="check-mark">✓</span> English
             </div>
-            <div class="dropdown-item checkable" id="menu-item-lang-tr">
+            <div class="dropdown-item checkable" role="menuitemradio" aria-checked="false" tabindex="-1" id="menu-item-lang-tr">
               <span class="check-mark">✓</span> Türkçe
             </div>
           </div>
         </div>
-        <div class="menu-item-container">
-          <div class="menu-item" id="menu-help" data-i18n="helpMenu">
+        <div class="menu-item-container" role="none">
+          <div class="menu-item" id="menu-help" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="dropdown-help" data-i18n="helpMenu">
             <span class="underline">H</span>elp
           </div>
-          <div class="dropdown-menu" id="dropdown-help">
-            <div class="dropdown-item" id="menu-item-tour" data-i18n="takeTour">
+          <div class="dropdown-menu" id="dropdown-help" role="menu" aria-labelledby="menu-help">
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-tour" data-i18n="takeTour">
               Take Guided Tour...
             </div>
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-clippy-trigger"
               data-i18n="askClippy"
             >
               Ask Clippy...
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item" id="menu-item-soundboard" data-i18n="soundboardMenu">
+            <div
+              class="dropdown-item" role="menuitem" tabindex="-1"
+              id="menu-item-soundboard"
+              data-i18n="soundboardMenu"
+            >
               Soundboard...
             </div>
             <div class="dropdown-divider"></div>
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-about"
               data-i18n="aboutPageEraser"
             >
@@ -174,6 +196,9 @@
           <span class="field-label" data-i18n="activeSite">Active Site:</span>
           <div class="field-value-sunken" id="domain-name">Loading...</div>
         </div>
+
+        <!-- Shown when nothing on the tab answers (opened before install/update) -->
+        <div class="reach-notice" id="reach-notice" role="alert" hidden></div>
 
         <!-- Action Select Trigger & Persist Checkbox -->
         <div style="display: flex; gap: 8px; align-items: center; width: 100%">
@@ -203,6 +228,36 @@
           </div>
         </div>
 
+        <!-- Layout X-Ray and Extract to Code -->
+        <div style="display: flex; gap: 4px; width: 100%; margin-top: 4px">
+          <button
+            class="win-btn"
+            id="btn-xray"
+            type="button"
+            style="flex: 1"
+          >
+            <span data-i18n="xrayBtn">Layout X-Ray</span>
+          </button>
+          <button
+            class="win-btn"
+            id="btn-extract"
+            type="button"
+            style="flex: 1"
+          >
+            <span data-i18n="extractBtn">Extract to Code</span>
+          </button>
+        </div>
+        <div style="width: 100%; margin-top: 4px">
+          <button
+            class="win-btn"
+            id="btn-diff"
+            type="button"
+            style="width: 100%"
+          >
+            <span data-i18n="diffBtn">Visual Diff</span>
+          </button>
+        </div>
+
         <!-- Modified Elements sunken panel with search filter -->
         <div class="list-section">
           <div class="list-title-row">
@@ -229,13 +284,52 @@
         </div>
 
         <!-- Reset Layout Button & Recycle Bin -->
-        <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px; width: 100%">
-          <button class="win-btn" id="btn-reset" type="button" style="flex: 1; height: 32px;" disabled>
+        <div
+          style="
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 4px;
+            width: 100%;
+          "
+        >
+          <button
+            class="win-btn"
+            id="btn-reset"
+            type="button"
+            style="flex: 1; height: 32px"
+            disabled
+          >
             <span data-i18n="restoreLayout">Restore All Layout</span>
           </button>
-          <div id="recycle-bin-container" class="win-recycle-bin" title="Drag elements here to restore them, or double-click to restore all">
-            <div class="recycle-bin-icon empty" id="recycle-bin-icon"></div>
-            <span class="recycle-bin-label" data-i18n="recycleBinLabel">Recycle Bin</span>
+          <div
+            id="recycle-bin-container"
+            class="win-recycle-bin"
+            title="Drag elements here to restore them, or double-click to restore all"
+            data-i18n-title="recycleBinHint"
+          >
+            <div class="recycle-bin-icon empty" id="recycle-bin-icon">
+              <svg
+                viewBox="0 0 22 20"
+                width="22"
+                height="20"
+                shape-rendering="crispEdges"
+                aria-hidden="true"
+              >
+                <g class="bin-paper">
+                  <rect x="5" y="1" width="8" height="6" fill="#ffffff" stroke="#000000" />
+                  <rect x="9" y="0" width="8" height="6" fill="#ffffff" stroke="#000000" />
+                  <path d="M11 2h4M11 4h4" stroke="#000080" />
+                </g>
+                <path d="M3 6h16l-2 13H5z" fill="#c0c0c0" stroke="#000000" />
+                <rect x="2" y="5" width="18" height="2" fill="#dfdfdf" stroke="#000000" />
+                <path d="M8 9v9M11 9v9M14 9v9" stroke="#808080" />
+                <path d="M11 11l3 5H8z" fill="#008000" stroke="#004000" />
+              </svg>
+            </div>
+            <span class="recycle-bin-label" data-i18n="recycleBinLabel"
+              >Recycle Bin</span
+            >
           </div>
         </div>
 
@@ -261,7 +355,7 @@
           <div class="shortcut-row">
             <span class="key-label">↓</span>
             <span class="key-desc" data-i18n="selectChild"
-              >Select Child Element</span
+              >Select Next Element Down</span
             >
           </div>
           <div class="shortcut-row">
@@ -290,6 +384,28 @@
             <span class="key-label">Alt+Shift+D</span>
             <span class="key-desc" data-i18n="restoreLayout"
               >Restore All Layout</span
+            >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Alt+Shift+W</span>
+            <span class="key-desc" data-i18n="paintWebpage">Paint Webpage</span>
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Alt+Shift+X</span>
+            <span class="key-desc" data-i18n="toggleXray"
+              >Toggle Layout X-Ray</span
+            >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Alt+Shift+C</span>
+            <span class="key-desc" data-i18n="toggleExtract"
+              >Toggle Extract to Code</span
+            >
+          </div>
+          <div class="shortcut-row">
+            <span class="key-label">Alt+Shift+V</span>
+            <span class="key-desc" data-i18n="toggleDiff"
+              >Toggle Visual Diff</span
             >
           </div>
         </fieldset>
@@ -329,14 +445,14 @@
 
     <!-- Modal Dialog (About PageEraser) -->
     <div class="win-modal-overlay" id="about-overlay" style="display: none">
-      <div class="win-modal">
+      <div class="win-modal" role="dialog" aria-modal="true" aria-labelledby="about-title">
         <div class="title-bar">
-          <div class="title-bar-text" data-i18n="aboutTitle">
+          <div class="title-bar-text" id="about-title" data-i18n="aboutTitle">
             About PageEraser
           </div>
           <div class="title-bar-controls">
             <button
-              aria-label="Close"
+              aria-label="Close" data-i18n-aria-label="closeAria"
               class="win-btn-control close-btn"
               id="btn-close-about"
               type="button"
@@ -358,7 +474,7 @@
           <div class="about-text-container">
             <div class="about-title">PageEraser.exe</div>
             <div class="about-version" data-i18n="aboutVersion">
-              Version 1.5.0 (Retro Edition)
+              Version {version} (Retro Edition)
             </div>
             <div class="about-copyright" data-i18n="copyright">
               Copyright © 1995-2026 Retro Systems Corp.
@@ -377,6 +493,7 @@
                 <a
                   href="https://github.com/rildir"
                   target="_blank"
+                  rel="noopener noreferrer"
                   class="win-link"
                   >GitHub</a
                 >
@@ -384,6 +501,7 @@
                 <a
                   href="https://www.linkedin.com/in/recep-ildir/"
                   target="_blank"
+                  rel="noopener noreferrer"
                   class="win-link"
                   >LinkedIn</a
                 >
@@ -393,8 +511,22 @@
                 <a
                   href="https://www.linkedin.com/in/ecemartut/"
                   target="_blank"
+                  rel="noopener noreferrer"
                   class="win-link"
                   >LinkedIn</a
+                >
+              </div>
+              <div class="about-divider"></div>
+              <div class="dev-links">
+                <!-- Shipped inside the extension, so the policy is readable
+                     offline and cannot rot when a hosting URL changes. -->
+                <a
+                  href="privacy-policy.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="win-link"
+                  data-i18n="privacyPolicy"
+                  >Privacy Policy</a
                 >
               </div>
             </div>
@@ -408,18 +540,103 @@
       </div>
     </div>
 
+    <!-- Modal Dialog (Import from code): paste, see what it holds, then add -->
+    <div
+      class="win-modal-overlay"
+      id="code-overlay"
+      style="display: none; z-index: 10000"
+    >
+      <div
+        class="win-modal"
+        style="min-width: 250px; max-width: 300px"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="code-title"
+      >
+        <div class="title-bar">
+          <div
+            class="title-bar-text"
+            id="code-title"
+            data-i18n="codeDialogTitle"
+          >
+            Import from Code
+          </div>
+          <div class="title-bar-controls">
+            <button
+              aria-label="Close" data-i18n-aria-label="closeAria"
+              class="win-btn-control close-btn"
+              id="btn-close-code"
+              type="button"
+            ></button>
+          </div>
+        </div>
+        <div class="win-modal-body" style="padding: 12px">
+          <label class="code-label" for="code-input" data-i18n="codePaste"
+            >Paste a PageEraser code:</label
+          >
+          <textarea
+            class="win-input code-input"
+            id="code-input"
+            rows="3"
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            placeholder="pageeraser:1:..."
+          ></textarea>
+          <div
+            class="code-preview"
+            id="code-preview"
+            role="status"
+            aria-live="polite"
+          ></div>
+          <div class="code-note" data-i18n="codeSafeNote">
+            Rules from someone else only hide or stretch elements on that site.
+          </div>
+          <div
+            class="alert-footer"
+            style="display: flex; justify-content: center; gap: 8px"
+          >
+            <button
+              class="win-btn win-btn-ok"
+              id="btn-add-code"
+              type="button"
+              disabled
+              style="width: 96px"
+            >
+              <span data-i18n="codeAddBtn">Add rules</span>
+            </button>
+            <button
+              class="win-btn win-btn-ok"
+              id="btn-cancel-code"
+              type="button"
+              style="width: 80px"
+            >
+              <span data-i18n="cancelBtn">Cancel</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal Dialog (Alert) -->
     <div
       class="win-modal-overlay"
       id="alert-overlay"
       style="display: none; z-index: 10000"
     >
-      <div class="win-modal" style="min-width: 250px; max-width: 300px">
+      <div
+        class="win-modal"
+        style="min-width: 250px; max-width: 300px"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="alert-title"
+        aria-describedby="alert-message"
+      >
         <div class="title-bar">
           <div class="title-bar-text" id="alert-title">PageEraser</div>
           <div class="title-bar-controls">
             <button
-              aria-label="Close"
+              aria-label="Close" data-i18n-aria-label="closeAria"
               class="win-btn-control close-btn"
               id="btn-close-alert"
               type="button"
@@ -465,18 +682,96 @@
       </div>
     </div>
 
+    <!-- Modal Dialog (Confirm) -->
+    <div
+      class="win-modal-overlay"
+      id="confirm-overlay"
+      style="display: none; z-index: 10000"
+    >
+      <div
+        class="win-modal"
+        style="min-width: 250px; max-width: 300px"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        aria-describedby="confirm-message"
+      >
+        <div class="title-bar">
+          <div class="title-bar-text" id="confirm-title">PageEraser</div>
+          <div class="title-bar-controls">
+            <button
+              aria-label="Close" data-i18n-aria-label="closeAria"
+              class="win-btn-control close-btn"
+              id="btn-close-confirm"
+              type="button"
+            ></button>
+          </div>
+        </div>
+        <div class="win-modal-body" style="padding: 16px">
+          <div
+            class="alert-text-container"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              margin-bottom: 20px;
+            "
+          >
+            <div id="confirm-icon" style="font-size: 32px; line-height: 1">
+              ❓
+            </div>
+            <div style="min-width: 0">
+              <div
+                class="alert-message"
+                id="confirm-message"
+                style="font-size: 12px; line-height: 1.4"
+              >
+                Are you sure?
+              </div>
+              <div
+                class="selector-text"
+                id="confirm-detail"
+                style="margin-top: 6px"
+              ></div>
+            </div>
+          </div>
+          <div
+            class="alert-footer"
+            style="display: flex; justify-content: center; gap: 8px"
+          >
+            <button
+              class="win-btn win-btn-ok"
+              id="btn-yes-confirm"
+              type="button"
+              style="width: 80px"
+            >
+              <span data-i18n="yesBtn">Yes</span>
+            </button>
+            <button
+              class="win-btn win-btn-ok"
+              id="btn-no-confirm"
+              type="button"
+              style="width: 80px"
+            >
+              <span data-i18n="noBtn">No</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal Dialog (Minesweeper) -->
     <div
       class="win-modal-overlay"
       id="minesweeper-overlay"
       style="display: none"
     >
-      <div class="win-modal" style="width: 162px">
+      <div class="win-modal" style="width: 162px" role="dialog" aria-modal="true" aria-labelledby="minesweeper-title">
         <div class="title-bar">
-          <div class="title-bar-text">Minesweeper</div>
+          <div class="title-bar-text" id="minesweeper-title">Minesweeper</div>
           <div class="title-bar-controls">
             <button
-              aria-label="Close"
+              aria-label="Close" data-i18n-aria-label="closeAria"
               class="win-btn-control close-btn"
               id="btn-close-minesweeper"
               type="button"
@@ -533,16 +828,32 @@
 
     <!-- Soundboard Dialog (Multimedia Control) -->
     <div id="overlay-soundboard" class="win-overlay" style="display: none">
-      <div class="window win-modal" id="modal-soundboard" style="width: 320px">
+      <div class="window win-modal" id="modal-soundboard" style="width: 320px" role="dialog" aria-modal="true" aria-labelledby="soundboard-title">
         <div class="title-bar">
-          <div class="title-bar-text" data-i18n="soundboardTitle">Sound Properties</div>
+          <div class="title-bar-text" id="soundboard-title" data-i18n="soundboardTitle">
+            Sound Properties
+          </div>
           <div class="title-bar-controls">
-            <button class="win-btn-control close-btn" id="btn-close-soundboard" aria-label="Close"></button>
+            <button
+              class="win-btn-control close-btn"
+              id="btn-close-soundboard"
+              aria-label="Close" data-i18n-aria-label="closeAria"
+            ></button>
           </div>
         </div>
         <div class="window-body">
-          <p style="margin-top: 0;" data-i18n="soundboardIntro">Select a sound event to preview:</p>
-          <div class="sunken-panel" style="height: 120px; overflow-y: auto; background: #fff; padding: 2px;">
+          <p style="margin-top: 0" data-i18n="soundboardIntro">
+            Select a sound event to preview:
+          </p>
+          <div
+            class="sunken-panel"
+            style="
+              height: 120px;
+              overflow-y: auto;
+              background: #fff;
+              padding: 2px;
+            "
+          >
             <div class="sound-event-item active" data-sound="startup">
               🔊 <span data-i18n="soundStartup">Windows 95 Startup</span>
             </div>
@@ -568,11 +879,22 @@
               🔊 <span data-i18n="soundSwish">Paint Brush</span>
             </div>
           </div>
-          <div class="field-row" style="justify-content: flex-end; margin-top: 10px; gap: 8px;">
-            <button class="win-btn" id="btn-play-soundboard" style="min-width: 60px;">
+          <div
+            class="field-row"
+            style="justify-content: flex-end; margin-top: 10px; gap: 8px"
+          >
+            <button
+              class="win-btn"
+              id="btn-play-soundboard"
+              style="min-width: 60px"
+            >
               ▶ <span data-i18n="soundPlay">Play</span>
             </button>
-            <button class="win-btn" id="btn-ok-soundboard" style="min-width: 60px;">
+            <button
+              class="win-btn"
+              id="btn-ok-soundboard"
+              style="min-width: 60px"
+            >
               <span data-i18n="okBtn">OK</span>
             </button>
           </div>
@@ -581,20 +903,30 @@
     </div>
 
     <!-- Blue Screen of Death (BSOD) Overlay -->
-    <div id="bsod-overlay" style="display: none;">
+    <div id="bsod-overlay" style="display: none">
       <div class="bsod-content">
         <div class="bsod-header">Windows</div>
-        <p>A fatal exception 0E has occurred at 0028:C0011A95 in VxD PageEraser(01) + 0000A115. The current webpage contains too many distracting elements, causing a severe layout headache.</p>
+        <p>
+          A fatal exception 0E has occurred at 0028:C0011A95 in VxD
+          PageEraser(01) + 0000A115. The current webpage contains too many
+          distracting elements, causing a severe layout headache.
+        </p>
         <p>System stability has been temporarily compromised.</p>
         <ul>
           <li>Press ENTER to restore all site elements to original layout.</li>
           <li>Press ESC to restart the PageEraser extension application.</li>
         </ul>
-        <p>Press any other key to attempt to continue. If you do, you might get lost in advertising clutter.</p>
-        <p style="text-align: center; margin-top: 30px;">Press any key to continue _</p>
+        <p>
+          Press any other key to attempt to continue. If you do, you might get
+          lost in advertising clutter.
+        </p>
+        <p style="text-align: center; margin-top: 30px">
+          Press any key to continue _
+        </p>
       </div>
     </div>
 
+    <script src="shared.js"></script>
     <script src="locales.js"></script>
     <script src="audio.js"></script>
     <script src="tour.js"></script>
