@@ -244,6 +244,19 @@ body {
   color: #ffffff;
 }
 
+/* Keyboard focus in the menu bar looks like a hover, plus a dotted frame. */
+.menu-item:focus-visible,
+.dropdown-item:focus-visible {
+  background: var(--active-highlight);
+  color: #ffffff;
+  outline: 1px dotted #ffffff;
+  outline-offset: -2px;
+}
+
+.dropdown-item:focus-visible .menu-shortcut {
+  color: #ffffff;
+}
+
 .dropdown-item.checkable .check-mark {
   position: absolute;
   left: 6px;
@@ -1033,7 +1046,8 @@ body {
   box-shadow: none !important;
 }
 
-.window.theme-high-contrast .menu-item:hover, .window.theme-high-contrast .menu-item.active {
+.window.theme-high-contrast .menu-item:hover, .window.theme-high-contrast .menu-item.active,
+.window.theme-high-contrast .menu-item:focus-visible, .window.theme-high-contrast .dropdown-item:focus-visible {
   background: #000000 !important;
   color: #ffffff !important;
 }

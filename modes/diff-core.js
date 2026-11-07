@@ -22,7 +22,9 @@ const PE_DIFF_DEFAULTS = Object.freeze({
   threshold: 16
 });
 
-// An image is remembered per site only while its data URL fits in 5 MB.
+// An image is remembered per site only while its data URL fits in 5 MiB. A data URL
+// is base64 text, a third bigger than the file, so that is a file of about 3.75 MiB:
+// the messages say "about 3.5 MB" to stay on the safe side.
 const PE_DIFF_MAX_STORED_CHARS = 5 * 1024 * 1024;
 // Bigger files are refused outright: decoding them would stall the page.
 const PE_DIFF_MAX_FILE_BYTES = 25 * 1024 * 1024;

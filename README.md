@@ -12,7 +12,7 @@
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
-[![Version](https://img.shields.io/badge/Version-1.11.0-FF4757?style=for-the-badge)]()
+[![Version](https://img.shields.io/badge/Version-1.11.1-FF4757?style=for-the-badge)]()
 
 *A Chrome/Edge extension wrapped in a nostalgic Windows 95 aesthetic — because cleaning up the web should be fun.*
 
@@ -126,7 +126,7 @@ Lay a design (a Figma export, a screenshot) over the live page and see where the
 - **Align** with opacity, X/Y offset (arrow keys move 1 px, `Shift` 10 px) and scale 50–200 %; *scroll with the page* pins the design to the document, off keeps it in the window
 - **Look** with *Invert*, a *Difference* blend, or a *Before / after* divider you drag: design on the left, live page on the right
 - **Compare** captures the visible page (your overlay hidden), puts the design on the same pixel grid and paints every pixel that differs by more than a per-channel threshold (default 16) as a translucent red heat map, with the percentage and the number of separate regions
-- The image and the alignment are remembered per site (images up to 5 MB) and never leave your computer
+- The image and the alignment are remembered per site (images up to about 3.5 MB) and never leave your computer
 - Start it from the toolbar button or `Alt+Shift+V`; `Esc` removes everything it added
 
 ### 📎 Clippy Assistant
@@ -210,7 +210,12 @@ Right-click any element on a page to access:
 - **Drag** rules to the Recycle Bin to restore them — the bin shows as full while there is something to restore
 - **Import/Export** rules as JSON backups via File menu
 - **Share as code**: *File → Copy Rules as Code* puts the current site's rules on your clipboard as one line (`pageeraser:1:…`). The other person opens *File → Import from Code…*, pastes it, sees which site it is for and what it holds, and presses *Add rules*. Nothing is uploaded: the code is only text, so it works in any chat or email
-- **Imported rules** are listed last, under their own heading with *Keep* (they become your own) and *Remove* (all of them, one click). Rules you already had stay yours. A code cannot carry a rule that hides the whole page, and every selector goes through the same checks as an imported backup
+- **Imported rules** are listed last, under their own heading with *Keep* (they become your own) and *Remove* (all of them, one click). Rules you already had stay yours. A code cannot carry a rule that hides the whole page (however its selector is spelled), and every selector goes through the same checks as an imported backup. Backup files are limited to 2 MB, 5,000 rules per site and 20,000 in all
+
+### Good to know
+- **Keyboard:** Tab to a menu title (File, Actions, Options, Help) and press `Enter`, `Space` or `↓`; `↑` `↓` move, `←` `→` change menu, `Esc` closes. `Alt` plus the underlined letter opens a menu too
+- **Frames:** the picker works on the page itself. An element inside an `<iframe>` (most ad slots) cannot be picked directly; select the `<iframe>` with the arrow keys and erase that
+- **Storage:** rules and the Visual Diff design image share the browser's 10 MB of extension storage. If it is full, PageEraser tells you the rule could not be saved instead of pretending it was
 
 ---
 

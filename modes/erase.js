@@ -66,13 +66,9 @@ function PE_createEraseMode(host) {
       const target = info.target;
       if (!target || target === document.documentElement || target === document.body) return;
 
-      // Ignore hover on our own highlighter/tooltip elements
-      if (target.classList.contains('pe-highlighter') ||
-          target.classList.contains('pe-tooltip') ||
-          target.closest('.pe-highlighter') ||
-          target.id === 'pe-stylesheet') {
-        return;
-      }
+      // Our own nodes (highlighter, tooltip, toasts, Clippy, the paint tools)
+      // are never a target: hovering a toast used to select it.
+      if (isOwnUi(target)) return;
 
       host._altPressed = info.altKey;
 

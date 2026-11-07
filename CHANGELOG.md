@@ -4,6 +4,86 @@ All notable changes to PageEraser are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project uses [Semantic Versioning](https://semver.org/).
 
+## [1.11.1] — 2026-11-06
+
+### Fixed
+
+- On a browser set to Turkish, the right-click entries ("PageEraser: Erase Element" and
+  "Stretch Element") stayed English until the popup had been opened once. The background
+  script assumed English when no language had been saved yet, while the popup and the page
+  tools already follow the browser. It now does the same, and a language the user chose
+  still wins. Existing installs are not affected: their choice is already saved.
+- **The popup's menus work from the keyboard.** File, Actions, Options and Help could not be
+  reached without a mouse (Tab skipped them, Enter did nothing), which left export and import,
+  copy as code, language, theme and the tour out of reach. The titles now take focus with Tab and
+  open with Enter, Space or ↓; ↑ ↓ Home End move through the entries, ← → hop between menus, Esc
+  closes, and Alt plus the underlined letter opens a menu (the letter follows the language).
+  Screen readers get a menu bar with menu items, check boxes and radio buttons. Choosing an
+  entry that opens a dialog hands focus back to the menu title when the dialog closes.
+- **About and Minesweeper are proper dialogs:** named, modal, Tab stays inside, Esc closes them
+  and focus returns to where it came from.
+- **A full browser storage is no longer silent.** Erasing with `chrome.storage.local` full said
+  "Element Erased" and saved nothing, so the element came back on the next load. It now says
+  "Hidden for now, but not saved: browser storage is full." Visual Diff shares that 10 MB with
+  your rules, so it no longer remembers a design image when less than 1 MB would be left for
+  them (it says so and the image keeps working until you leave the page).
+- **Two tabs of one site erasing at the same moment** no longer lose a rule: the writes take
+  turns (Web Locks, https pages; where the browser has none they run as before).
+- **Editing a rule** in a tab that does not answer (opened before an update) no longer leaves
+  the old rule next to the new one: the popup swaps the rule in storage itself. Pressing Save
+  without changing the selector (or only its spaces) just closes the editor; before this fix it
+  deleted the rule it had just written.
+- A page that holds the extension's lock for good can no longer keep a rule from being saved:
+  the wait is capped at 2 seconds, after which the write goes ahead as it did before locks.
+- The **Soundboard** is a named, modal dialog like About and Minesweeper (Tab stays inside,
+  Esc closes it, focus comes back), and a minimised window re-titles itself when the language
+  changes.
+- Visual Diff's "not remembered" message states what is really stored: images up to about
+  3.5 MB (a 5 MB limit was written before, but the stored copy is about a third larger than the
+  file). The privacy policy and the README say the same.
+- The in-page hint calls the ↓ key "Next" ("Sonraki"), as the popup does.
+- Hovering the extension's own toast in selection mode no longer selects it.
+- The toast's Undo and ✕ ignore a click a web page makes on its own, like every other control.
+- Rules are now applied in SVG and XML documents too (the stylesheet was created without a
+  namespace there, so "Element Erased" hid nothing).
+- Two right-click menu rebuilds at the same moment (install or start-up plus a language change)
+  no longer collide on "duplicate id"; they take turns.
+- **Language:** the Close / Minimize / Maximize labels and the Recycle Bin hint follow the
+  language (they were English for a screen reader in Turkish), "[Minimized]" is translated, the
+  ✕ of toasts and the Paint toolbox follows the language, English reads "1 rule", "1 element ·
+  1 font" instead of "1 rules", and the ↓ shortcut is described as what it does: "Select Next
+  Element Down" (it walks the page in document order).
+
+### Security
+
+- **A shared code can no longer blank a page with a longer spelling of `body`.** The old check
+  knew a few exact forms; `#a, body`, `html, body`, `:not(.x)`, `body *`, `html:is(*)`, `*|*`
+  and about a dozen more got through. A selector is now judged by what it is made of: it is
+  refused when no part of it names anything specific (an id, a class, an attribute, or a tag
+  other than html, body and head), every comma-separated part is judged, escapes such as
+  `\62 ody` are decoded first, and anything that cannot be read counts as too broad.
+  `.sidebar *` and `body > .banner` still pass. As a second layer, a rule that is still marked
+  *imported* is held back if it matches `<html>` or `<body>` on the real page; *Keep* is the
+  user's own decision and lifts that.
+- **Backup files are capped:** 2 MB, 5,000 rules per site, 20,000 rules in all. A 120,000-rule
+  file used to freeze the popup for about 26 seconds, be saved, and make every page load heavier.
+  Over the limit the usual "invalid backup" message appears and nothing is saved.
+
+### Known limitations
+
+- The picker runs on the top page only: elements inside an `<iframe>` (an ad slot, for
+  instance) cannot be selected, the frame shows no highlight, and a click goes to the frame.
+  Pick the frame itself with the arrow keys instead.
+- Clicking to erase does not work inside an SVG or XML document opened on its own (rules you
+  already have still apply there).
+- A rule saved in one tab shows in other open tabs of the same site after they reload.
+- A shared code with only a tag as selector (`main`, `div`) passes the safety check, because it
+  names something; Remove undoes it. Whole-page selectors are still refused.
+- Pages opened from disk (`file://`) share one rule list.
+- Minesweeper is played with the mouse only, and the first-run tour is not a keyboard dialog yet.
+- The BSOD easter egg is English only, and the *Tokens* tab of Extract to Code keeps its name
+  in Turkish, like *HTML* and *CSS*.
+
 ## [1.11.0] — 2026-11-05
 
 ### Added

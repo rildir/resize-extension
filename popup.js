@@ -374,6 +374,13 @@
 
         saveBtn.addEventListener('click', async () => {
           const newSelector = editInput.value.trim();
+          // Saving without changing the selector (or only its spaces) changes
+          // nothing. It must not go on: the tab would be told to restore the
+          // old selector, and that removes the rule that was just written.
+          if (newSelector === selectorStr) {
+            applyFilter();
+            return;
+          }
           // Hand-typed selectors get interpolated into a page stylesheet, so
           // they go through the same validation as an imported rule.
           if (!PE_isSafeSelector(newSelector)) {
@@ -387,15 +394,16 @@
 
           RetroAudio.playSelection();
 
-          // 1. Tell tab to restore old selector (clears inline styles and removes from storage)
-          await sendMessageToTab({ type: 'RESTORE_SELECTOR', selector: selectorStr, silent: true });
-
-          // 2. Fetch the updated list from storage (which now has the old selector removed)
+          // 1. Swap the rule in storage right here, as Restore does. Asking the
+          // tab to remove the old one is not enough: a tab that is not
+          // answering (opened before an update) used to leave the old rule in
+          // place next to the new one.
           const key = `pe_selectors_${currentDomain}`;
           const data = await storage.get(key);
-          let selectors = data[key] || [];
-
-          // 3. Add the new selector rule
+          let selectors = (data[key] || []).filter(item => {
+            const sel = typeof item === 'string' ? item : (item && item.selector);
+            return sel !== selectorStr;
+          });
           if (isString) {
             selectors.push(newSelector);
           } else {
@@ -403,7 +411,10 @@
           }
           await storage.set({ [key]: selectors });
 
-          // 4. Tell tab to load and apply the new rules
+          // 2. The tab clears the inline styles the old rule left on the page...
+          await sendMessageToTab({ type: 'RESTORE_SELECTOR', selector: selectorStr, silent: true });
+
+          // 3. ...and loads and applies the new list.
           await sendMessageToTab({ type: 'REFRESH_RULES', silent: true });
 
           await refreshSelectorsList();
@@ -538,18 +549,180 @@
       if (!wasVisible) {
         dropdown.classList.add('visible');
         menuItem.classList.add('active');
+        menuItem.setAttribute('aria-expanded', 'true');
       }
     });
   });
 
   function closeAllDropdowns() {
     dropdownMenus.forEach(d => d.classList.remove('visible'));
-    menuItems.forEach(m => m.classList.remove('active'));
+    menuItems.forEach(m => {
+      m.classList.remove('active');
+      m.setAttribute('aria-expanded', 'false');
+    });
   }
 
   document.addEventListener('click', () => {
     closeAllDropdowns();
   });
+
+  /* ─── Menu Bar: keyboard ──────────────────────────────────
+   * The menus used to answer to the mouse only: Tab skipped them, Enter did
+   * nothing, and everything under File, Options and Help (export and import,
+   * copy as code, language, theme) was out of reach without one.
+   *   menu title : Enter / Space / ↓ open it, ↑ opens it at the last entry,
+   *                ← → move to the next title, Esc closes
+   *   entry      : ↑ ↓ Home End move, Enter / Space choose, ← → change menu,
+   *                Esc closes and returns to the title, Tab leaves
+   *   Alt + the underlined letter opens a menu (the letter follows the language)
+   */
+  const menuBarItems = Array.from(menuItems);
+  const dropdownOf = (menuItem) => menuItem.parentElement.querySelector('.dropdown-menu');
+  const entriesOf = (dropdown) => Array.from(dropdown.querySelectorAll('.dropdown-item'));
+
+  function openMenu(menuItem, focusWhich) {
+    closeAllDropdowns();
+    const dropdown = dropdownOf(menuItem);
+    dropdown.classList.add('visible');
+    menuItem.classList.add('active');
+    menuItem.setAttribute('aria-expanded', 'true');
+    if (focusWhich) {
+      const list = entriesOf(dropdown);
+      const target = focusWhich === 'last' ? list[list.length - 1] : list[0];
+      if (target) target.focus();
+    }
+  }
+
+  function hopMenu(fromItem, step, keepOpen) {
+    const count = menuBarItems.length;
+    const next = menuBarItems[(menuBarItems.indexOf(fromItem) + step + count) % count];
+    if (keepOpen) openMenu(next, 'first'); else next.focus();
+  }
+
+  menuBarItems.forEach((menuItem) => {
+    menuItem.addEventListener('keydown', (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      const isOpen = menuItem.classList.contains('active');
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') openMenu(menuItem, 'first');
+      else if (e.key === 'ArrowUp') openMenu(menuItem, 'last');
+      else if (e.key === 'ArrowRight') hopMenu(menuItem, 1, isOpen);
+      else if (e.key === 'ArrowLeft') hopMenu(menuItem, -1, isOpen);
+      else if (e.key === 'Escape') closeAllDropdowns();
+      else return;
+      e.preventDefault();
+    });
+  });
+
+  dropdownMenus.forEach((dropdown) => {
+    const owner = dropdown.parentElement.querySelector('.menu-item');
+
+    dropdown.addEventListener('keydown', (e) => {
+      const entry = e.target.closest ? e.target.closest('.dropdown-item') : null;
+      if (!entry || e.altKey || e.ctrlKey || e.metaKey) return;
+      const list = entriesOf(dropdown);
+      const at = list.indexOf(entry);
+      switch (e.key) {
+        case 'ArrowDown': list[(at + 1) % list.length].focus(); break;
+        case 'ArrowUp': list[(at - 1 + list.length) % list.length].focus(); break;
+        case 'Home': list[0].focus(); break;
+        case 'End': list[list.length - 1].focus(); break;
+        case 'ArrowRight': hopMenu(owner, 1, true); break;
+        case 'ArrowLeft': hopMenu(owner, -1, true); break;
+        case 'Escape': closeAllDropdowns(); owner.focus(); break;
+        case 'Tab': closeAllDropdowns(); return; // let Tab carry on from here
+        case 'Enter':
+        case ' ': entry.click(); break;
+        default: return;
+      }
+      e.preventDefault();
+    });
+
+    // Choosing an entry that closes the menu hands focus back to the menu
+    // title first: a dialog it opens then remembers a visible place to return
+    // to (the entry itself is about to disappear). Capture phase, so this runs
+    // before the entry's own handler.
+    dropdown.addEventListener('click', (e) => {
+      const entry = e.target.closest ? e.target.closest('.dropdown-item') : null;
+      if (entry && !entry.classList.contains('checkable')) owner.focus();
+    }, true);
+  });
+
+  // Checkable entries say whether they are on, for screen readers.
+  document.querySelectorAll('.dropdown-item[aria-checked]').forEach((entry) => {
+    const sync = () => entry.setAttribute('aria-checked', entry.classList.contains('checked') ? 'true' : 'false');
+    sync();
+    new MutationObserver(sync).observe(entry, { attributes: true, attributeFilter: ['class'] });
+  });
+
+  const dialogIsOpen = () => Array.from(
+    document.querySelectorAll('.win-modal-overlay, .win-overlay, .win-tour-overlay, #bsod-overlay')
+  ).some((overlay) => window.getComputedStyle(overlay).display !== 'none');
+
+  document.addEventListener('keydown', (e) => {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
+    const letter = String(e.key || '').toLowerCase();
+    const target = menuBarItems.find((menuItem) => {
+      const mark = menuItem.querySelector('.underline');
+      return mark && mark.textContent.trim().toLowerCase() === letter;
+    });
+    if (!target || dialogIsOpen()) return;
+    e.preventDefault();
+    openMenu(target, 'first');
+  });
+
+  /* About and Minesweeper were plain overlays: no dialog role, Tab walked out
+   * to the page behind and Esc did nothing. They get what the other dialogs
+   * have: focus moves in, Tab stays inside, Esc closes, focus goes back to
+   * where it came from. Several files show them through style.display, so the
+   * overlay is watched instead of every caller being changed. */
+  function makeDialogKeyboardFriendly(overlay, closeButton) {
+    if (!overlay || !closeButton) return;
+    let before = null;
+    let wasOpen = false;
+    const isOpen = () => overlay.style.display !== '' && overlay.style.display !== 'none';
+    const focusables = () => Array.from(
+      overlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    ).filter((el) => !el.disabled && el.getClientRects().length > 0);
+
+    new MutationObserver(() => {
+      const open = isOpen();
+      if (open && !wasOpen) {
+        before = document.activeElement;
+        (focusables()[0] || closeButton).focus();
+      } else if (!open && wasOpen) {
+        if (before && typeof before.focus === 'function' && document.contains(before)) before.focus();
+        before = null;
+      }
+      wasOpen = open;
+    }).observe(overlay, { attributes: true, attributeFilter: ['style'] });
+
+    overlay.addEventListener('keydown', (e) => {
+      if (!isOpen()) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeButton.click();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (!overlay.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
+  }
+
+  makeDialogKeyboardFriendly(aboutOverlay, btnCloseAbout);
+  makeDialogKeyboardFriendly(document.getElementById('minesweeper-overlay'), document.getElementById('btn-close-minesweeper'));
 
   /* ─── Alert Dialog ───────────────────────────────────────── */
   const alertOverlay = document.getElementById('alert-overlay');
@@ -726,8 +899,22 @@
 
     const clean = {};
     let ruleCount = 0;
+    let rawCount = 0;
 
-    Object.keys(parsed.rules).forEach(domain => {
+    // Counted before any rule is checked: validating 100 000 selectors is what
+    // used to freeze the popup.
+    const domains = Object.keys(parsed.rules);
+    if (domains.length > PE_BACKUP_MAX_RULES_TOTAL) return null;
+    for (const domain of domains) {
+      const list = parsed.rules[domain];
+      if (Array.isArray(list)) {
+        if (list.length > PE_BACKUP_MAX_RULES_PER_SITE) return null;
+        rawCount += list.length;
+        if (rawCount > PE_BACKUP_MAX_RULES_TOTAL) return null;
+      }
+    }
+
+    domains.forEach(domain => {
       // Domains become storage keys and scope which sites a rule touches, so
       // only accept something that actually looks like a hostname.
       if (typeof domain !== 'string' || domain.length > 253) return;
@@ -744,6 +931,12 @@
 
   async function importRules(file) {
     try {
+      // Refused by size before the file is even read into memory.
+      if (!file || file.size > PE_BACKUP_MAX_BYTES) {
+        RetroAudio.playError();
+        showAlert('importFailedTitle', 'importFailedMsg', '❌');
+        return;
+      }
       const text = await file.text();
       const incoming = parseBackup(text);
 
@@ -902,7 +1095,9 @@
       return;
     }
     codeParsed = result;
-    addLine('code-summary', fill(t.codeSummary, { n: result.rules.length, site: result.domain }));
+    addLine('code-summary', result.rules.length === 1
+      ? fill(t.codeSummaryOne, { site: result.domain })
+      : fill(t.codeSummary, { n: result.rules.length, site: result.domain }));
     result.rules.slice(0, CODE_PREVIEW_ROWS).forEach((rule) => {
       addLine(`selector-text text-${rule.action}`, `${rule.action === 'stretch' ? '↔' : '✕'} ${rule.selector}`, rule.selector);
     });
@@ -934,7 +1129,9 @@
       await refreshSelectorsList();
 
       const t = LOCALES[currentLang];
-      let message = added === 0 ? fill(t.codeAddedNone, { site }) : fill(t.codeAddedMsg, { n: added, site });
+      let message = added === 0
+        ? fill(t.codeAddedNone, { site })
+        : (added === 1 ? fill(t.codeAddedMsgOne, { site }) : fill(t.codeAddedMsg, { n: added, site }));
       if (added > 0 && site !== currentDomain) message += ' ' + fill(t.codeAddedElsewhere, { site });
       RetroAudio.playSelection();
       showAlert('codeAddedTitle', message, '✔️');
@@ -1205,6 +1402,28 @@
       }
     });
 
+    // A minimised window shows its title with a suffix: keep it in the new language.
+    const windowForTitle = document.querySelector('.window');
+    const mainTitle = document.querySelector('.window > .title-bar .title-bar-text');
+    if (windowForTitle && mainTitle && windowForTitle.classList.contains('minimized') &&
+        LOCALES[currentLang] && LOCALES[currentLang].minimizedTitle) {
+      mainTitle.textContent = LOCALES[currentLang].minimizedTitle;
+    }
+
+    // Translate aria-label and title attributes
+    document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+      const key = el.getAttribute('data-i18n-aria-label');
+      if (LOCALES[currentLang] && LOCALES[currentLang][key] !== undefined) {
+        el.setAttribute('aria-label', LOCALES[currentLang][key]);
+      }
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+      const key = el.getAttribute('data-i18n-title');
+      if (LOCALES[currentLang] && LOCALES[currentLang][key] !== undefined) {
+        el.title = LOCALES[currentLang][key];
+      }
+    });
+
     // Update active lang checkmarks in the options menu
     ['en', 'tr'].forEach(lang => {
       const el = document.getElementById('menu-item-lang-' + lang);
@@ -1335,7 +1554,7 @@
 
     if (isMinimized) {
       windowEl.classList.add('minimized');
-      titleText.textContent = 'PageEraser.exe — [Minimized]';
+      titleText.textContent = LOCALES[currentLang].minimizedTitle;
     } else {
       windowEl.classList.remove('minimized');
       titleText.textContent = 'PageEraser.exe';
@@ -1350,7 +1569,7 @@
 
     if (isMinimized) {
       windowEl.classList.add('minimized');
-      titleText.textContent = 'PageEraser.exe — [Minimized]';
+      titleText.textContent = LOCALES[currentLang].minimizedTitle;
     } else {
       windowEl.classList.remove('minimized');
       titleText.textContent = 'PageEraser.exe';
@@ -1434,6 +1653,7 @@
 
   if (btnCloseSoundboard) btnCloseSoundboard.addEventListener('click', hideSoundboard);
   if (btnOkSoundboard) btnOkSoundboard.addEventListener('click', hideSoundboard);
+  makeDialogKeyboardFriendly(overlaySoundboard, btnCloseSoundboard);
 
   soundItems.forEach(item => {
     item.addEventListener('click', () => {

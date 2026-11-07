@@ -1221,11 +1221,329 @@ console.log('release-candidate fixes');
     }
   })());
   pending.push((async () => {
+    // the right-click menu language: saved choice, else the browser, never a blind 'en'
+    const bgSrc = read('background.js').replace(/\r/g, '');
+    const grabTop = (name) => { const m = new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}\\n`).exec(bgSrc); return m ? m[0] : ''; };
+    check('background.js: getLang and browserLang exist and no longer fall back to a fixed English',
+      [grabTop('getLang').length > 80, grabTop('browserLang').length > 80, /LOCALES\[data\.pe_lang\] \? data\.pe_lang : 'en'/.test(bgSrc)], [true, true, false]);
+    const makeGetLang = (language, stored, fail) => new Function('LOCALES', 'chrome', 'navigator',
+      `${grabTop('browserLang')}\n${grabTop('getLang')}\nreturn getLang;`)(
+      { en: {}, tr: {} },
+      { storage: { local: { get: async () => { if (fail) throw new Error('storage down'); return stored === undefined ? {} : { pe_lang: stored }; } } } },
+      { language });
+    const cases = [
+      ['tr-TR', undefined, false, 'tr'], ['tr', undefined, false, 'tr'], ['TR-tr', undefined, false, 'tr'],
+      ['en-US', undefined, false, 'en'], ['de-DE', undefined, false, 'en'], [undefined, undefined, false, 'en'],
+      ['en-US', 'tr', false, 'tr'], ['tr-TR', 'en', false, 'en'],
+      ['tr-TR', 'xx', false, 'tr'], ['en-US', 'xx', false, 'en'], ['tr-TR', null, false, 'tr'],
+      ['tr-TR', undefined, true, 'tr'], ['en-US', undefined, true, 'en']];
+    const got = [];
+    for (const [language, stored, fail] of cases) got.push(await makeGetLang(language, stored, fail)());
+    check('getLang: a saved language wins, an invalid or missing one follows the browser, a storage error does too',
+      got, cases.map((c) => c[3]));
+  })());
+  pending.push((async () => {
     check('launchOnTab: nothing answered -> the notice is shown and the popup stays open',
       await launch(null), [false, ['notice']]);
     check('launchOnTab: the page answered -> notice cleared, popup closes',
       await launch({ success: true }), [true, ['clear', 'close']]);
   })());
+})();
+
+/* ─── RC5 fixes: bug-hunt findings ───────────────────────── */
+console.log('RC5 bug-hunt fixes');
+(() => {
+  const LOC = new Function(`${read('locales.js')}\nreturn LOCALES;`)();
+  const consts = eval(`${read('shared.js')}\n;({ PE_BACKUP_MAX_BYTES, PE_BACKUP_MAX_RULES_PER_SITE, PE_BACKUP_MAX_RULES_TOTAL })`);
+  const contentSrc = read('content.js').replace(/\r/g, '');
+  const popupSrc = read('popup.js').replace(/\r/g, '');
+  const popupHtml = read('popup.html').replace(/\r/g, '');
+  const popupCss = read('popup.css').replace(/\r/g, '');
+  const bgSrc = read('background.js').replace(/\r/g, '');
+  const eraseSrc = read('modes/erase.js').replace(/\r/g, '');
+  const diffSrc = read('modes/diff.js').replace(/\r/g, '');
+  const method = (src, name) => {
+    const m = new RegExp(`\\n    (?:async )?${name}\\([^)]*\\) \\{[\\s\\S]*?\\n    \\}\\n`).exec(src);
+    return m ? m[0] : '';
+  };
+  const grabPopup = (name) => {
+    const m = new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}\\n`).exec(popupSrc);
+    return m ? m[0] : '';
+  };
+
+  /* F-D6-1: a shared code cannot blank a page */
+  const wholePage = [
+    '*', 'html', 'body', 'head', ':root', 'html > body', 'html body', 'BODY',
+    '#a, body', '#a,body', 'body, #a', 'html, body', ':is(body)', ':where(html)', 'body:not(.zzz)', 'html:not(.zzz)',
+    ':not(.zzz)', 'body *', 'body:not(#nope)', ':is(#a, :root)', '*|*', ':not(#nope):not(#nope2)',
+    `${B}62 ody`, `b${B}6f dy`, 'body > *', 'html > body > *', ':has(.ad)', 'body:has(.x)', ':first-child', 'html:is(*)', ':is(.a, *)',
+    '.a,', '', '   '];
+  const specific = [
+    '#a', '.ad', 'div > span', '#main .ad-slot', 'a[href^="/news"]', 'ul li:not(.keep)', '.sidebar *', 'body > .banner',
+    'html .x', 'body.dark', 'footer', 'nav', 'div:not(.x)', ':is(.a,.b)', ':where(#x, .y) > p',
+    'html > body > div:nth-of-type(2) > header', 'svg|rect', '[data-ad]', 'div:has(.ad)', '.a, .b'];
+  check('PE_isTooBroad: every way of naming the whole page is refused',
+    wholePage.filter((s) => !PE_isTooBroad(s)), []);
+  check('PE_isTooBroad: ordinary rules (including ones with a wildcard under a class) pass',
+    specific.filter((s) => PE_isTooBroad(s)), []);
+  const wrap = (selectors) => 'pageeraser:1:' + PE_b64urlEncode(JSON.stringify({ d: 'a.com', r: selectors.map((s) => ({ s })) }));
+  check('PE_parseShare: a code holding only whole-page selectors gives "rules"; a mixed one keeps the good rule and counts the rest',
+    [PE_parseShare(wrap(['#a, body'])).reason, PE_parseShare(wrap(['html, body', ':not(.zzz)'])).reason,
+     (() => { const r = PE_parseShare(wrap(['.ad', 'body *', 'html:is(*)'])); return [r.ok, r.rules.map((x) => x.selector), r.skipped]; })()],
+    ['rules', 'rules', [true, ['.ad'], 2]]);
+  // robustness: nothing in here may throw or be slow, whatever it is fed
+  const alphabet = ['body', 'html', '*', ':not(', ':is(', ')', ',', ' ', '>', '#a', '.b', '[x="', '"]', '\\', ':', '|', '(', '+', '~', '\u0000', 'ç'];
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  let threw = 0;
+  const t0 = Date.now();
+  for (let i = 0; i < 3000; i++) {
+    let s = '';
+    for (let n = 0, len = 1 + Math.floor(rnd() * 40); n < len; n++) s += alphabet[Math.floor(rnd() * alphabet.length)];
+    try { PE_isTooBroad(s); } catch (e) { threw++; }
+  }
+  const nested = ':is('.repeat(600) + '.a' + ')'.repeat(600);
+  const t1 = Date.now();
+  let nestedResult;
+  try { nestedResult = PE_isTooBroad(nested); } catch (e) { nestedResult = 'threw'; }
+  const slow = PE_isTooBroad('a,'.repeat(1900) + 'body');
+  check('PE_isTooBroad: 3000 random strings and a 600-deep nesting never throw and finish quickly',
+    [threw, nestedResult, slow, Date.now() - t0 < 3000, Date.now() - t1 < 1500], [0, false, true, true, true]);
+
+  /* F-D6-1: the page itself is asked too, for rules not yet kept */
+  const guard = method(contentSrc, '_hidesWholePage');
+  check('content.js: _applySelectors drops a rule _hidesWholePage refuses, and builds its <style> in the right namespace',
+    [guard.length > 300, /PE_normalizeRules\(selectors\)\.filter\(\(rule\) => !this\._hidesWholePage\(rule\)\)/.test(contentSrc),
+     /document\.createElementNS\(svgRoot \? PE_SVG_NS : PE_XHTML_NS, 'style'\)/.test(contentSrc), /document\.createElement\('style'\)/.test(contentSrc)],
+    [true, true, true, false]);
+  if (guard) {
+    const make = (doc) => new Function('document', `return { ${guard.trim().replace(/^_hidesWholePage/, '_hidesWholePage')} }`)(doc);
+    const listeners = [];
+    const html = { matches: (s) => s === 'html' };
+    const kid = (tag, id, cls, hides) => ({ tagName: tag, id, getAttribute: () => cls, matches: (s) => hides.includes(s) });
+    const body = {
+      matches: (s) => s === 'body' || s === ':not(.zzz)' || s === 'body.dark',
+      children: [kid('SCRIPT', '', '', []), kid('DIV', 'app', '', ['body *', '#app', 'body > *']), kid('MAIN', '', 'wide', ['body *', 'body > *']),
+        kid('DIV', 'pe-paint-canvas', '', []), kid('DIV', '', 'pe-highlighter', [])]
+    };
+    const withBody = make({ documentElement: html, body, readyState: 'complete', addEventListener() {} });
+    const early = make({ documentElement: html, body: null, readyState: 'loading', addEventListener: (t, fn) => listeners.push(t) });
+    const rule = (selector, extra) => Object.assign({ selector, action: 'hide', imported: true }, extra);
+    check('_hidesWholePage: imported hide rules reaching <html> or <body> are held back; own rules, stretch rules and misses are not',
+      [withBody._hidesWholePage(rule('body')), withBody._hidesWholePage(rule(':not(.zzz)')), withBody._hidesWholePage(rule('body.dark')),
+       withBody._hidesWholePage(rule('.ad')), withBody._hidesWholePage(rule('body', { imported: false })),
+       withBody._hidesWholePage(rule('body', { action: 'stretch' })), withBody._hidesWholePage(null),
+       make({ documentElement: { matches() { throw new Error('bad'); } }, body, readyState: 'complete' })._hidesWholePage(rule('x'))],
+      [true, true, true, false, false, false, false, false]);
+    check('_hidesWholePage: hiding every visible child of <body> counts as the whole page (our own nodes and scripts do not count); hiding one of them does not',
+      [withBody._hidesWholePage(rule('body *')), withBody._hidesWholePage(rule('body > *')), withBody._hidesWholePage(rule('#app')),
+       make({ documentElement: html, body: { matches: () => false, children: [] }, readyState: 'complete' })._hidesWholePage(rule('body *'))],
+      [true, true, false, false]);
+    early._hidesWholePage(rule('.ad'));
+    early._hidesWholePage(rule('.ad'));
+    check('_hidesWholePage: before <body> exists it looks again once the page is parsed (one listener, not one per call)',
+      [early._hidesWholePage(rule('html')), listeners], [true, ['DOMContentLoaded']]);
+  }
+
+  /* F-D2-3 and F-D2-2: a failed save is told, writes take turns */
+  const erase = method(contentSrc, '_eraseElement');
+  check('content.js _eraseElement: writes under a lock, notices when the save failed and says so (and not for a dead extension)',
+    [/const saved = await this\._withRulesLock\(key,/.test(erase), /const written = await storage\.set\(/.test(erase), /return written;/.test(erase),
+     /if \(!saved && isContextAlive\(\)\)/.test(erase), erase.includes("'warn'"), erase.includes('browser storage is full'), erase.includes('tarayıcı depolaması dolu')],
+    [true, true, true, true, true, true, true]);
+  check('content.js _restoreSelector shares the lock; toast Undo and ✕ ignore a click the page made',
+    [/_restoreSelector[\s\S]{0,400}_withRulesLock\(key,/.test(contentSrc),
+     /undoBtn\.addEventListener\('click', \(e\) => \{\s*e\.stopPropagation\(\);\s*\/\/[^\n]*\n\s*if \(e\.isTrusted === false\) return;/.test(contentSrc),
+     /pe-toast-close-btn'\)\.addEventListener\('click', \(e\) => \{\s*e\.stopPropagation\(\);\s*if \(e\.isTrusted === false\) return;/.test(contentSrc)],
+    [true, true, true]);
+  const lockSrc = method(contentSrc, '_withRulesLock');
+  if (lockSrc) {
+    const make = (navigator, waitMs = 50) => new Function('navigator', 'PE_LOCK_WAIT_MS', `return { ${lockSrc.trim()} }`)(navigator, waitMs);
+    pending.push((async () => {
+      const calls = [];
+      const lockedNav = { locks: { request: async (name, opts, cb) => { calls.push(['lock', name, typeof opts.signal]); return cb(); } } };
+      const a = await make(lockedNav)._withRulesLock('k', async () => { calls.push('work'); return 'done'; });
+      const noLocks = await make({})._withRulesLock('k', async () => 'plain');
+      let runs = 0;
+      const seenInLock = calls.slice();
+      const refusing = await make({ locks: { request: async () => { throw new Error('SecurityError'); } } })
+        ._withRulesLock('k', async () => { runs++; return 'unlocked'; });
+      let workRuns = 0;
+      let thrown = null;
+      try {
+        await make(lockedNav)._withRulesLock('k', async () => { workRuns++; throw new Error('boom'); });
+      } catch (e) { thrown = e.message; }
+      check('_withRulesLock: runs inside the lock, runs plain without Web Locks or when they refuse, and never runs the work twice',
+        [a, seenInLock, noLocks, refusing, runs, thrown, workRuns],
+        ['done', [['lock', 'pe-rules:k', 'object'], 'work'], 'plain', 'unlocked', 1, 'boom', 1]);
+
+      // R6-4: a lock somebody else holds for good delays a write by the wait cap, not forever
+      let heldRuns = 0;
+      const held = { locks: { request: (name, opts, cb) => new Promise((resolve, reject) => {
+        opts.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+      }) } };
+      const t0 = Date.now();
+      const late = await Promise.race([
+        make(held, 30)._withRulesLock('k', async () => { heldRuns++; return 'went ahead'; }),
+        new Promise((resolve) => setTimeout(() => resolve('hung'), 1500))]);
+      check('_withRulesLock: a lock held for good is waited for only PE_LOCK_WAIT_MS, then the work runs once, unlocked',
+        [late, heldRuns, Date.now() - t0 >= 25, Date.now() - t0 < 1500], ['went ahead', 1, true, true]);
+      check('content.js caps the lock wait at 2 s and clears the timer when the lock is granted or refused',
+        [/const PE_LOCK_WAIT_MS = 2000;/.test(contentSrc), /setTimeout\(\(\) => waiting\.abort\(\), PE_LOCK_WAIT_MS\)/.test(contentSrc),
+         (lockSrc.match(/clearTimeout\(timer\)/g) || []).length], [true, true, 2]);
+    })());
+  }
+
+  /* F-D2-3: Visual Diff images leave room for the rules */
+  check('content.js offers _storageHeadroom; Visual Diff keeps 1 MB free and says why in both languages when an image does not fit',
+    [/async _storageHeadroom\(\)/.test(contentSrc), /getBytesInUse\(null\)/.test(contentSrc), diffSrc.includes('PE_DIFF_RULES_RESERVE = 1024 * 1024'),
+     /await host\._removeSetting\(imageKey\(\)\);\s*const room = await host\._storageHeadroom\(\);\s*if \(room < info\.dataUrl\.length \+ PE_DIFF_RULES_RESERVE\)/.test(diffSrc),
+     (diffSrc.match(/lowSpace:/g) || []).length],
+    [true, true, true, true, 2]);
+
+  /* F-D1-3 */
+  check('erase mode: hovering a toast (or any PageEraser node) never selects it',
+    [/onPointerMove\(info\)[\s\S]*?if \(isOwnUi\(target\)\) return;/.test(eraseSrc), eraseSrc.includes("target.classList.contains('pe-highlighter')")], [true, false]);
+
+  /* F-A1 */
+  check('background.js: menu rebuilds queue behind each other',
+    [/let contextMenuQueue = Promise\.resolve\(\);/.test(bgSrc), /contextMenuQueue = contextMenuQueue\.then\(buildContextMenus, buildContextMenus\)/.test(bgSrc)], [true, true]);
+  pending.push((async () => {
+    const grabBg = (kw, name) => { const m = new RegExp(`${kw}function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}\\n`).exec(bgSrc); return m ? m[0] : ''; };
+    const run = async (serialised, times) => {
+      const live = new Set();
+      const errors = [];
+      const chrome = {
+        runtime: { lastError: null },
+        contextMenus: {
+          // The browser forgets the entries when it gets the call; the callback comes back later.
+          removeAll: (cb) => { live.clear(); setTimeout(cb, 3); },
+          create: (opts, cb) => { if (live.has(opts.id)) errors.push('duplicate ' + opts.id); else live.add(opts.id); if (cb) cb(); }
+        }
+      };
+      const build = grabBg('async ', 'buildContextMenus');
+      const src = serialised
+        ? `let contextMenuQueue = Promise.resolve();\n${grabBg('', 'setupContextMenus')}\n${build}\nreturn setupContextMenus;`
+        : `${build.replace('buildContextMenus', 'setupContextMenus')}\nreturn setupContextMenus;`;
+      const setup = new Function('chrome', 'getLang', 'LOCALES', 'MENU_ERASE', 'MENU_STRETCH', 'console', src)(
+        chrome, async () => 'en', { en: { ctxErase: 'e', ctxStretch: 's' } }, 'erase', 'stretch', { warn() {} });
+      await Promise.all(Array.from({ length: times }, () => setup()));
+      return [errors, [...live].sort()];
+    };
+    check('setupContextMenus: three rebuilds at once end with exactly two entries and no "duplicate id"',
+      await run(true, 3), [[], ['erase', 'stretch']]);
+    check('(the check above does fail when the rebuilds run side by side)',
+      (await run(false, 3))[0].length > 0, true);
+  })());
+
+  /* F-D3-1: backup files */
+  const parseBackupSrc = grabPopup('parseBackup');
+  if (parseBackupSrc) {
+    const parse = new Function('PE_normalizeRules', 'PE_BACKUP_MAX_RULES_PER_SITE', 'PE_BACKUP_MAX_RULES_TOTAL', 'BACKUP_FORMAT',
+      `${parseBackupSrc}\nreturn parseBackup;`)(PE_normalizeRules, consts.PE_BACKUP_MAX_RULES_PER_SITE, consts.PE_BACKUP_MAX_RULES_TOTAL, 'PageEraser-rules');
+    const file = (rules) => JSON.stringify({ format: 'PageEraser-rules', rules });
+    const many = (n, tag) => Array.from({ length: n }, (_, i) => `.${tag}${i}`);
+    const sites = (n, each) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`s${i}.example.com`, many(each, 'r')]));
+    check('parseBackup: an ordinary backup loads; 5001 rules for one site, 20001 across sites, or 20001 sites are refused',
+      [Object.keys(parse(file({ 'a.com': ['.x', { selector: '#y', action: 'stretch' }] }))),
+       parse(file({ 'a.com': many(5000, 'a') })) !== null, parse(file({ 'a.com': many(5001, 'a') })),
+       parse(file(sites(4, 5000))) !== null, parse(file(sites(5, 4001))), parse(file(Object.fromEntries(Array.from({ length: 20001 }, (_, i) => [`d${i}.com`, ['.x']]))))],
+      [['a.com'], true, null, true, null, null]);
+  }
+  check('importRules refuses a big file before reading it; the limits are in shared.js',
+    [/file\.size > PE_BACKUP_MAX_BYTES/.test(popupSrc), consts.PE_BACKUP_MAX_BYTES, consts.PE_BACKUP_MAX_RULES_PER_SITE, consts.PE_BACKUP_MAX_RULES_TOTAL],
+    [true, 2 * 1024 * 1024, 5000, 20000]);
+
+  /* F-D2-1: Edit swaps the rule in storage itself */
+  const saveAt = popupSrc.indexOf("saveBtn.addEventListener('click'");
+  const saveBlock = popupSrc.slice(saveAt, popupSrc.indexOf("cancelBtn.addEventListener('click'", saveAt));
+  check('Edit → Save: the old rule leaves storage in the popup, before any message to the tab',
+    [saveBlock.length > 500, saveBlock.indexOf('sel !== selectorStr') > 0,
+     saveBlock.indexOf('await storage.set(') > 0 && saveBlock.indexOf('await storage.set(') < saveBlock.indexOf("type: 'RESTORE_SELECTOR'"),
+     saveBlock.indexOf("type: 'RESTORE_SELECTOR'") < saveBlock.indexOf("type: 'REFRESH_RULES'")], [true, true, true, true]);
+
+  /* R6-1: Save without a change must not delete the rule */
+  check('Edit → Save: an unchanged selector (or only its spaces) just closes the editor, before any storage write or message',
+    [saveBlock.indexOf('if (newSelector === selectorStr) {') > 0,
+     saveBlock.indexOf('if (newSelector === selectorStr) {') < saveBlock.indexOf('PE_isSafeSelector(newSelector)'),
+     saveBlock.indexOf('if (newSelector === selectorStr) {') < saveBlock.indexOf('await storage.set('),
+     /if \(newSelector === selectorStr\) \{\s*applyFilter\(\);\s*return;\s*\}/.test(saveBlock)], [true, true, true, true]);
+
+  /* R6-2 (Soundboard), R6-10, R6-6 */
+  check('Soundboard is a named, modal dialog with the same keyboard behaviour as About and Minesweeper',
+    [/id="modal-soundboard"[^>]*role="dialog" aria-modal="true" aria-labelledby="soundboard-title"/.test(popupHtml), popupHtml.includes('id="soundboard-title"'),
+     /makeDialogKeyboardFriendly\(overlaySoundboard, btnCloseSoundboard\)/.test(popupSrc)], [true, true, true]);
+  check('the hint on the page says "Next" (not "Child") for ↓, in both languages',
+    [contentSrc.includes("const childText = isTr ? 'Sonraki' : 'Next';"), contentSrc.includes("'Child'")], [true, false]);
+  check('Visual Diff says what it really stores (about 3.5 MB of file), in the messages, the policy and the README',
+    [diffSrc.includes('images up to about 3.5 MB are stored'), diffSrc.includes("yaklaşık 3,5 MB\\'a kadar"), diffSrc.includes('at most 5 MB is stored'),
+     /up to about 3\.5 MB/.test(read('privacy-policy.html')), /fits in 5 MB\./.test(read('privacy-policy.html')), /up to about 3\.5 MB/.test(read('README.md'))],
+    [true, true, false, true, false, true]);
+
+  /* F-D5-1: the menus work from the keyboard */
+  const titles = [...popupHtml.matchAll(/<div class="menu-item" id="(menu-[a-z]+)"([^>]*)>/g)];
+  const lists = [...popupHtml.matchAll(/<div class="dropdown-menu" id="(dropdown-[a-z]+)"([^>]*)>/g)];
+  const entries = [...popupHtml.matchAll(/<div\s+class="dropdown-item([^"]*)"([^>]*)>/g)];
+  check('popup.html: a menubar of four focusable titles, each controlling a role=menu list that exists',
+    [/<div class="menu-bar" role="menubar">/.test(popupHtml), titles.length, titles.every((m) => /role="menuitem"/.test(m[2]) && /tabindex="0"/.test(m[2]) && /aria-haspopup="menu"/.test(m[2]) && /aria-expanded="false"/.test(m[2])),
+     titles.every((m) => lists.some((l) => l[1] === m[2].match(/aria-controls="([^"]+)"/)[1])), lists.length, lists.every((l) => /role="menu"/.test(l[2]))],
+    [true, 4, true, true, 4, true]);
+  check('popup.html: every menu entry has a role and is reachable by arrow keys only; toggles carry aria-checked, themes and languages are radios',
+    [entries.length >= 25, entries.filter((m) => !/role="menu(?:item|itemcheckbox|itemradio)"/.test(m[2]) || !/tabindex="-1"/.test(m[2])).length,
+     entries.filter((m) => /checkable/.test(m[1]) && !/aria-checked="(?:true|false)"/.test(m[2])).length,
+     (popupHtml.match(/role="menuitemradio"/g) || []).length, (popupHtml.match(/role="menuitemcheckbox"/g) || []).length],
+    [true, 0, 0, 5, 5]);
+  const letters = (lang) => ['fileMenu', 'actionsMenu', 'optionsMenu', 'helpMenu'].map((k) => (/class="underline">(.)</.exec(LOC[lang][k]) || [])[1]);
+  check('the underlined menu letters (the Alt accelerators) are different from each other in both languages',
+    [new Set(letters('en')).size, new Set(letters('tr')).size, letters('en').join(''), letters('tr').join('')], [4, 4, 'FAOH', 'DESY']);
+  check('popup.js wires the menu keys: open, move, hop, close, choose, Alt+letter; popup.css shows the keyboard focus',
+    [/e\.key === 'Enter' \|\| e\.key === ' ' \|\| e\.key === 'ArrowDown'\) openMenu\(menuItem, 'first'\)/.test(popupSrc),
+     /case 'Escape': closeAllDropdowns\(\); owner\.focus\(\); break;/.test(popupSrc), /case 'ArrowLeft': hopMenu\(owner, -1, true\)/.test(popupSrc),
+     /case 'Enter':\s*case ' ': entry\.click\(\); break;/.test(popupSrc), /if \(!e\.altKey \|\| e\.ctrlKey \|\| e\.metaKey \|\| e\.shiftKey/.test(popupSrc),
+     /\}, true\);\s*\}\);\s*\/\/ Checkable entries/.test(popupSrc), /\.menu-item:focus-visible,\s*\.dropdown-item:focus-visible\s*\{/.test(popupCss)],
+    [true, true, true, true, true, true, true]);
+
+  /* F-D5-2 / F-D5-3: dialogs */
+  check('About and Minesweeper are role=dialog, aria-modal and named; popup.js gives them Esc, a focus trap and a focus return',
+    [/id="about-overlay"[\s\S]{0,200}role="dialog" aria-modal="true" aria-labelledby="about-title"/.test(popupHtml), popupHtml.includes('id="about-title"'),
+     /id="minesweeper-overlay"[\s\S]{0,200}role="dialog" aria-modal="true" aria-labelledby="minesweeper-title"/.test(popupHtml), popupHtml.includes('id="minesweeper-title"'),
+     /makeDialogKeyboardFriendly\(aboutOverlay, btnCloseAbout\)/.test(popupSrc), /makeDialogKeyboardFriendly\(document\.getElementById\('minesweeper-overlay'\)/.test(popupSrc)],
+    [true, true, true, true, true, true]);
+
+  /* F-B1..F-B6: language */
+  const ariaKeys = [...popupHtml.matchAll(/data-i18n-(?:aria-label|title)="([^"]+)"/g)].map((m) => m[1]);
+  check('popup.html: no fixed-English Close / Minimize / Maximize labels left; every data-i18n-aria-label and data-i18n-title key exists in both languages',
+    [(popupHtml.match(/aria-label="(?:Close|Minimize|Maximize)"(?![^>]*data-i18n-aria-label)/g) || []).length,
+     ariaKeys.length >= 8, ariaKeys.filter((k) => !enKeys.has(k) || !trKeys.has(k))], [0, true, []]);
+  check('popup.js: updateUI translates aria-label and title attributes; the minimised title is a locale string in both languages',
+    [/querySelectorAll\('\[data-i18n-aria-label\]'\)/.test(popupSrc), /querySelectorAll\('\[data-i18n-title\]'\)/.test(popupSrc),
+     popupSrc.includes('[Minimized]'), (popupSrc.match(/titleText\.textContent = LOCALES\[currentLang\]\.minimizedTitle/g) || []).length, LOC.en.minimizedTitle, LOC.tr.minimizedTitle],
+    [true, true, false, 2, 'PageEraser.exe — [Minimized]', 'PageEraser.exe — [Küçültüldü]']);
+  check('a language change while the window is minimised re-titles it (updateUI), without touching a variable declared later',
+    [/windowForTitle\.classList\.contains\('minimized'\)/.test(popupSrc), /mainTitle\.textContent = LOCALES\[currentLang\]\.minimizedTitle/.test(popupSrc),
+     /document\.querySelector\('\.window > \.title-bar \.title-bar-text'\)/.test(popupSrc),
+     popupHtml.indexOf('class="window"') < popupHtml.indexOf('<div class="title-bar-text">PageEraser.exe</div>')],
+    [true, true, true, true]);
+  check('page-side ✕ buttons (toast, Paint toolbox) follow the language',
+    [contentSrc.includes("titlebar.querySelector('.pe-toast-close-btn').setAttribute('aria-label', this.isTr ? 'Kapat' : 'Close')"),
+     contentSrc.includes("toolbox.querySelector('.pe-paint-toolbox-close').setAttribute('aria-label', isTr ? 'Kapat' : 'Close')"),
+     (contentSrc.match(/aria-label="/g) || []).length, (contentSrc.match(/aria-label="Close"/g) || []).length], [true, true, 0, 0]);
+  check('singular forms: the code dialogs and the Extract summary say "1 rule", not "1 rules"',
+    [LOC.en.codeSummaryOne, LOC.tr.codeSummaryOne, LOC.en.codeAddedMsgOne, LOC.tr.codeAddedMsgOne,
+     /result\.rules\.length === 1\s*\?\s*fill\(t\.codeSummaryOne/.test(popupSrc), /added === 1 \? fill\(t\.codeAddedMsgOne/.test(popupSrc)],
+    ['1 rule for {site}', '{site} için 1 kural', '1 rule added for {site}.', '{site} için 1 kural eklendi.', true, true]);
+  const statsSrc = /stats: (\(s\) => `\$\{s\.label\} · \$\{s\.shown\} \$\{s\.shown === 1[^`]*`)/.exec(extractJs);
+  if (statsSrc) {
+    const stats = new Function(`return ${statsSrc[1]}`)();
+    check('Extract to Code summary (English): singular and plural',
+      [stats({ label: 'x', shown: 1, rules: 1, fonts: 1, colors: 1 }), stats({ label: 'x', shown: 2, rules: 0, fonts: 3, colors: 4 })],
+      ['x · 1 element · 1 rule · 1 font · 1 color', 'x · 2 elements · 0 rules · 3 fonts · 4 colors']);
+  } else {
+    check('Extract to Code summary (English): singular and plural', 'pattern not found', 'found');
+  }
+  check('the ↓ shortcut is described as what it does (next element), in the page, the locale tables and both languages',
+    [popupHtml.includes('>Select Next Element Down</span'), LOC.en.selectChild, LOC.tr.selectChild, popupHtml.includes('Select Child Element')],
+    [true, 'Select Next Element Down', 'Aşağıdaki Sonraki Elementi Seç', false]);
 })();
 
 /* ─── Result ─────────────────────────────────────────────── */

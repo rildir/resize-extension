@@ -14,12 +14,15 @@
   // Eraser sweep animation. content.css (.pe-erasing / .pe-restoring) plays
   // the same 350ms — keep the two in step; tests/run.js checks that they are.
   const PE_SWEEP_MS = 350;
+  // How long a rule write waits for its Web Lock before it carries on without it.
+  const PE_LOCK_WAIT_MS = 2000;
   // Concurrent sweeps allowed before the effect is skipped.
   const PE_SWEEP_MAX_ACTIVE = 6;
   // Restoring more elements than this in one go (Restore All on a busy site)
   // skips the effect entirely rather than masking dozens of subtrees at once.
   const PE_SWEEP_BULK_LIMIT = 6;
   const PE_XHTML_NS = 'http://www.w3.org/1999/xhtml';
+  const PE_SVG_NS = 'http://www.w3.org/2000/svg';
 
   /* ─── Extension Context Guard ───────────────────────────────
    * When the extension is reloaded, updated or disabled, every content script
@@ -369,6 +372,20 @@
       return storage.remove(key);
     }
 
+    /* Bytes still free in chrome.storage.local, or Infinity when that cannot be
+     * read. Rules and Visual Diff's remembered design image share one 10 MB
+     * quota; Visual Diff asks here so an image can never crowd the rules out. */
+    async _storageHeadroom() {
+      try {
+        if (!isContextAlive()) return 0;
+        const used = await rawStorage.getBytesInUse(null);
+        const quota = typeof rawStorage.QUOTA_BYTES === 'number' ? rawStorage.QUOTA_BYTES : 10485760;
+        return Math.max(0, quota - used);
+      } catch (err) {
+        return Infinity;
+      }
+    }
+
     /* Layout X-Ray's Capture: ask the service worker for a screenshot of the
      * visible tab. Always resolves — { dataUrl } or { error } — never rejects. */
     _captureTab() {
@@ -512,6 +529,33 @@
       }
     }
 
+    /* Two tabs of one site that erase at the same moment both read the rule
+     * list, add their rule and write it back, and the later write used to wipe
+     * the earlier one. Web Locks (https pages) make them take turns. Where
+     * they are missing, or refuse to work, the work simply runs unlocked.
+     * Lock names are shared with the page's own scripts, so a page could hold
+     * this one for good; waiting is capped (PE_LOCK_WAIT_MS) and then the write
+     * goes ahead without the lock instead of never happening. */
+    async _withRulesLock(key, work) {
+      const locks = (typeof navigator !== 'undefined') ? navigator.locks : null;
+      if (!locks || typeof locks.request !== 'function') return work();
+      let started = false;
+      const waiting = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = waiting ? setTimeout(() => waiting.abort(), PE_LOCK_WAIT_MS) : null;
+      try {
+        return await locks.request('pe-rules:' + key, waiting ? { signal: waiting.signal } : {}, async () => {
+          started = true;
+          if (timer) clearTimeout(timer);
+          return work();
+        });
+      } catch (err) {
+        if (started) throw err;
+        return work();
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    }
+
     async _loadAndApplyErasedElements() {
       try {
         const domain = await this._getDomain();
@@ -527,7 +571,10 @@
     _applySelectors(selectors) {
       let styleEl = document.getElementById('pe-stylesheet');
       if (!styleEl) {
-        styleEl = document.createElement('style');
+        // createElementNS: in an SVG or XML document createElement makes a
+        // style element in no namespace, which no browser applies.
+        const svgRoot = document.documentElement.namespaceURI === PE_SVG_NS;
+        styleEl = document.createElementNS(svgRoot ? PE_SVG_NS : PE_XHTML_NS, 'style');
         styleEl.id = 'pe-stylesheet';
         // Append to documentElement immediately to avoid layout flash on load
         document.documentElement.appendChild(styleEl);
@@ -535,7 +582,7 @@
       // Last line of defence: rules can arrive from an imported backup or a
       // hand-edited selector, and they are about to be interpolated into a
       // stylesheet. Anything that could break out of `sel { … }` is dropped.
-      const safeRules = PE_normalizeRules(selectors);
+      const safeRules = PE_normalizeRules(selectors).filter((rule) => !this._hidesWholePage(rule));
 
       if (safeRules.length === 0) {
         styleEl.textContent = '';
@@ -567,6 +614,36 @@
       }).join('\n');
       styleEl.textContent = cssRules;
       this._updateBadge(safeRules.length);
+    }
+
+    /* A rule that came from a shared code and has not been kept yet may never
+     * hide <html>, <body> or everything inside <body>, however its selector is
+     * spelled (PE_isTooBroad reads the text; this asks the page). Before <body>
+     * exists only <html> can be checked, so the rules are looked at again once
+     * the page is parsed. */
+    _hidesWholePage(rule) {
+      if (!rule || rule.imported !== true || rule.action !== 'hide') return false;
+      try {
+        const root = document.documentElement;
+        const body = document.body;
+        if (!body && !this._bodyRecheck && document.readyState === 'loading') {
+          this._bodyRecheck = true;
+          document.addEventListener('DOMContentLoaded', () => {
+            this._bodyRecheck = false;
+            this._loadAndApplyErasedElements();
+          }, { once: true });
+        }
+        if (root && root.matches(rule.selector)) return true;
+        if (!body) return false;
+        if (body.matches(rule.selector)) return true;
+        // Every visible child of <body> hidden is the whole page too (`body *`).
+        const content = Array.from(body.children).filter((el) =>
+          !/^(?:SCRIPT|STYLE|LINK|NOSCRIPT|TEMPLATE)$/i.test(el.tagName) &&
+          !/(?:^|\s)pe-/.test(`${el.id} ${el.getAttribute('class') || ''}`));
+        return content.length > 0 && content.every((el) => el.matches(rule.selector));
+      } catch (err) {
+        return false;
+      }
     }
 
     _updateBadge(count) {
@@ -656,8 +733,9 @@
         titlebar.className = 'pe-toast-titlebar';
         titlebar.innerHTML = `
           <span class="pe-toast-title">PageEraser.exe</span>
-          <button class="pe-toast-close-btn" type="button" aria-label="Close"></button>
+          <button class="pe-toast-close-btn" type="button"></button>
         `;
+        titlebar.querySelector('.pe-toast-close-btn').setAttribute('aria-label', this.isTr ? 'Kapat' : 'Close');
 
         // Toast body content
         const body = document.createElement('div');
@@ -670,6 +748,7 @@
         if (action === 'erase') icon = '🗑️';
         if (action === 'stretch') icon = '↔️';
         if (action === 'success') icon = '✔️';
+        if (action === 'warn') icon = '⚠️';
 
         text.innerHTML = `<span style="font-size: 14px; margin-right: 6px; vertical-align: middle;">${icon}</span> ${message}`;
         body.appendChild(text);
@@ -683,6 +762,8 @@
 
           undoBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            // Only the user's own click undoes: a page script can call click().
+            if (e.isTrusted === false) return;
             this._restoreSelector(selector);
             toast.classList.remove('pe-toast-visible');
             toast.classList.add('pe-toast-hidden');
@@ -703,6 +784,7 @@
         // Bind close button
         titlebar.querySelector('.pe-toast-close-btn').addEventListener('click', (e) => {
           e.stopPropagation();
+          if (e.isTrusted === false) return;
           toast.classList.remove('pe-toast-visible');
           toast.classList.add('pe-toast-hidden');
           setTimeout(() => {
@@ -784,7 +866,7 @@
             : `<span style="color:#ff4757;font-weight:700;"><kbd>Click</kbd> Erase Element</span> <span style="opacity: 0.5; margin: 0 4px;">|</span> <kbd>Alt+Click</kbd> Stretch`);
 
       const parentText = isTr ? 'Üst' : 'Parent';
-      const childText = isTr ? 'Alt' : 'Child';
+      const childText = isTr ? 'Sonraki' : 'Next';
       const siblingText = isTr ? 'Kardeş' : 'Sibling';
       const cancelText = isTr ? 'İptal' : 'Cancel';
 
@@ -936,19 +1018,32 @@
         try {
           const domain = await this._getDomain();
           const key = `pe_selectors_${domain}`;
-          const data = await storage.get(key);
-          let selectors = data[key] || [];
-          
-          // Remove existing rule for same selector to prevent conflict
-          selectors = selectors.filter(item => {
-            const sel = typeof item === 'string' ? item : item.selector;
-            return sel !== selector;
-          });
+          const saved = await this._withRulesLock(key, async () => {
+            const data = await storage.get(key);
+            let selectors = data[key] || [];
 
-          selectors.push({ selector, action });
-          await storage.set({ [key]: selectors });
-          this._applySelectors(selectors);
+            // Remove existing rule for same selector to prevent conflict
+            selectors = selectors.filter(item => {
+              const sel = typeof item === 'string' ? item : item.selector;
+              return sel !== selector;
+            });
+
+            selectors.push({ selector, action });
+            const written = await storage.set({ [key]: selectors });
+            this._applySelectors(selectors);
+            return written;
+          });
           this._undoStack.push({ selector, action });
+          // A full quota used to fail silently: the element stayed hidden, the
+          // toast said "Erased", and the page came back whole on the next load.
+          if (!saved && isContextAlive()) {
+            this._showToast(
+              isTr
+                ? 'Şimdilik gizlendi ama kaydedilemedi: tarayıcı depolaması dolu.'
+                : 'Hidden for now, but not saved: browser storage is full.',
+              'warn'
+            );
+          }
         } catch (err) {
           this._log('Error saving element selector:', err);
         }
@@ -961,18 +1056,23 @@
       try {
         const domain = await this._getDomain();
         const key = `pe_selectors_${domain}`;
-        const data = await storage.get(key);
-        let selectors = data[key] || [];
+        const outcome = await this._withRulesLock(key, async () => {
+          const data = await storage.get(key);
+          const current = data[key] || [];
 
-        // Deleted from the Recycle Bin for good — Ctrl+Z must not resurrect it.
-        const existing = selectors.find(item => typeof item === 'object' && item && item.selector === selector);
-        if (existing && existing.permanent === true) return 'permanent';
+          // Deleted from the Recycle Bin for good — Ctrl+Z must not resurrect it.
+          const existing = current.find(item => typeof item === 'object' && item && item.selector === selector);
+          if (existing && existing.permanent === true) return { permanent: true };
 
-        selectors = selectors.filter(item => {
-          const sel = typeof item === 'string' ? item : item.selector;
-          return sel !== selector;
+          const left = current.filter(item => {
+            const sel = typeof item === 'string' ? item : item.selector;
+            return sel !== selector;
+          });
+          await storage.set({ [key]: left });
+          return { left };
         });
-        await storage.set({ [key]: selectors });
+        if (outcome.permanent) return 'permanent';
+        const selectors = outcome.left;
 
         // Restored mid-sweep: cancel the pending hide.
         this._sweeping.delete(selector);
@@ -1447,7 +1547,7 @@
       toolbox.innerHTML = `
         <div class="pe-paint-toolbox-titlebar">
           <span class="pe-paint-toolbox-title">${titleText}</span>
-          <button class="pe-paint-toolbox-close" type="button" aria-label="Close"></button>
+          <button class="pe-paint-toolbox-close" type="button"></button>
         </div>
         <div class="pe-paint-toolbox-body">
           <div class="pe-paint-group">
@@ -1502,6 +1602,7 @@
         </div>
       `;
 
+      toolbox.querySelector('.pe-paint-toolbox-close').setAttribute('aria-label', isTr ? 'Kapat' : 'Close');
       document.body.appendChild(toolbox);
       this._makeElementDraggable(toolbox, toolbox.querySelector('.pe-paint-toolbox-titlebar'));
       updateCanvasCursor();

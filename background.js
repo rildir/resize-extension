@@ -76,34 +76,54 @@ async function migrateSyncToLocal() {
 }
 
 // ─── Context Menu Setup ───────────────────────────────────
-async function getLang() {
+// Until the user has saved a language, follow the browser the same way the popup
+// and the page tools do (popup.js, content.js): a Turkish browser gets Turkish.
+function browserLang() {
   try {
-    const data = await chrome.storage.local.get('pe_lang');
-    return LOCALES[data.pe_lang] ? data.pe_lang : 'en';
+    return String(navigator.language || '').toLowerCase().startsWith('tr') ? 'tr' : 'en';
   } catch (err) {
     return 'en';
   }
 }
 
-async function setupContextMenus() {
-  const lang = await getLang();
-  const t = LOCALES[lang];
+async function getLang() {
+  try {
+    const data = await chrome.storage.local.get('pe_lang');
+    return LOCALES[data.pe_lang] ? data.pe_lang : browserLang();
+  } catch (err) {
+    return browserLang();
+  }
+}
 
-  // removeAll() first: onInstalled also fires on every extension update, and
-  // create() with an already-registered id throws "duplicate id".
-  await new Promise(resolve => chrome.contextMenus.removeAll(resolve));
+/* Rebuilds the two entries. Several things can ask for that within the same
+ * moment (onInstalled, onStartup and a language change on first open), and two
+ * rebuilds running side by side both pass removeAll() and then collide on
+ * "duplicate id". So they take turns: each one starts after the last finished. */
+let contextMenuQueue = Promise.resolve();
 
-  chrome.contextMenus.create({
-    id: MENU_ERASE,
-    title: t.ctxErase,
-    contexts: ['all']
-  });
+function setupContextMenus() {
+  contextMenuQueue = contextMenuQueue.then(buildContextMenus, buildContextMenus);
+  return contextMenuQueue;
+}
 
-  chrome.contextMenus.create({
-    id: MENU_STRETCH,
-    title: t.ctxStretch,
-    contexts: ['all']
-  });
+async function buildContextMenus() {
+  try {
+    const lang = await getLang();
+    const t = LOCALES[lang];
+
+    // removeAll() first: onInstalled also fires on every extension update, and
+    // create() with an already-registered id throws "duplicate id".
+    await new Promise(resolve => chrome.contextMenus.removeAll(resolve));
+
+    // The callback reads lastError so a failure is logged, not left "unchecked".
+    const made = () => {
+      if (chrome.runtime.lastError) console.warn('[PageEraser] Context menu:', chrome.runtime.lastError.message);
+    };
+    chrome.contextMenus.create({ id: MENU_ERASE, title: t.ctxErase, contexts: ['all'] }, made);
+    chrome.contextMenus.create({ id: MENU_STRETCH, title: t.ctxStretch, contexts: ['all'] }, made);
+  } catch (err) {
+    console.warn('[PageEraser] Context menu setup failed:', err);
+  }
 }
 
 chrome.runtime.onInstalled.addListener(async () => {

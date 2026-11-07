@@ -151,6 +151,153 @@ function PE_normalizeRules(list) {
   return out;
 }
 
+/* A backup file comes from wherever the user got it. These caps keep a hostile
+ * or broken one from freezing the popup and from bloating every page load. */
+const PE_BACKUP_MAX_BYTES = 2 * 1024 * 1024;
+const PE_BACKUP_MAX_RULES_PER_SITE = 5000;
+const PE_BACKUP_MAX_RULES_TOTAL = 20000;
+
+/* ─── Whole-page selectors ─────────────────────────────────
+ * A shared code must not be able to blank a page. Listing the few exact forms
+ * (`body`, `html`, `*` …) is not enough: `#a, body`, `:not(.x)`, `body *` or
+ * `html:is(*)` all reach the same elements. So a selector is judged by what it
+ * is built from: it is "too broad" when no part of it says anything specific
+ * about an element: no id, class, attribute, or tag other than html, body and
+ * head. Negations, :has() and the other pseudo-classes do not count as
+ * specific, and neither does a :is() / :where() list with even one broad entry.
+ * Every comma-separated part is judged on its own, escapes are decoded first
+ * (`\62 ody` is `body`), and anything the reader cannot make sense of counts as
+ * too broad. The content script repeats the check against the real page for
+ * rules that are still marked imported (see _hidesWholePage), which also
+ * covers what a reader of selector text can miss.
+ */
+const PE_BROAD_TAGS = new Set(['html', 'body', 'head']);
+const PE_LIST_PSEUDOS = new Set(['is', 'where', 'matches', 'any', '-webkit-any', '-moz-any']);
+
+/* Splits text where isSeparator(char) is true, but not inside (), [], quotes or
+ * an escape (`\62 ` is one unit: hex digits plus the space that ends them). */
+function PE_splitTopLevel(text, isSeparator) {
+  const parts = [];
+  let current = '';
+  let depth = 0;
+  let quote = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '\\') {
+      let end = i + 1;
+      if (/[0-9a-fA-F]/.test(text[end] || '')) {
+        let digits = 0;
+        while (digits < 6 && /[0-9a-fA-F]/.test(text[end] || '')) { end++; digits++; }
+        if (/\s/.test(text[end] || '')) end++;
+      } else if (end < text.length) {
+        end++;
+      }
+      current += text.slice(i, end);
+      i = end - 1;
+      continue;
+    }
+    if (quote) {
+      current += ch;
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === '(' || ch === '[') depth++;
+    else if ((ch === ')' || ch === ']') && depth > 0) depth--;
+    if (depth === 0 && isSeparator(ch)) {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current);
+  return parts;
+}
+
+/* Index of the ")" that closes the "(" at `open`, or text.length when unclosed. */
+function PE_closingParen(text, open) {
+  let depth = 0;
+  let quote = '';
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '\\') { i++; continue; }
+    if (quote) { if (ch === quote) quote = ''; continue; }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === '(') depth++;
+    else if (ch === ')') { depth--; if (depth === 0) return i; }
+  }
+  return text.length;
+}
+
+function PE_unescapeIdent(text) {
+  return text.replace(/\\(?:([0-9a-fA-F]{1,6})\s?|([\s\S]))/g, (match, hex, other) => {
+    if (other !== undefined) return other;
+    const code = parseInt(hex, 16);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '�';
+  });
+}
+
+/* True when one compound selector (no combinators) names something specific. */
+function PE_compoundIsSpecific(compound) {
+  let i = 0;
+  while (i < compound.length) {
+    const ch = compound[i];
+    if (ch === '#' || ch === '.' || ch === '[') return true;
+    if (ch === ':') {
+      let j = i;
+      while (compound[j] === ':') j++;
+      const doubleColon = j - i > 1;
+      let k = j;
+      while (k < compound.length && !'(:#.['.includes(compound[k])) k += compound[k] === '\\' ? 2 : 1;
+      const name = compound.slice(j, k).toLowerCase();
+      let end = k;
+      let args = null;
+      if (compound[k] === '(') {
+        const close = PE_closingParen(compound, k);
+        args = compound.slice(k + 1, close);
+        end = Math.min(close + 1, compound.length);
+      }
+      if (!doubleColon && args !== null && PE_LIST_PSEUDOS.has(name)) {
+        const entries = PE_splitTopLevel(args, (c) => c === ',');
+        if (entries.every((entry) => entry.trim() && !PE_partIsBroad(entry))) return true;
+      }
+      i = end > i ? end : i + 1;
+      continue;
+    }
+    // A type selector, `*`, or `ns|name`, up to the next simple selector.
+    let j = i;
+    while (j < compound.length && !'#.[:'.includes(compound[j])) j += compound[j] === '\\' ? 2 : 1;
+    const token = PE_unescapeIdent(compound.slice(i, j));
+    const name = token.slice(token.lastIndexOf('|') + 1).toLowerCase();
+    if (name && name !== '*' && !PE_BROAD_TAGS.has(name)) return true;
+    i = j > i ? j : i + 1;
+  }
+  return false;
+}
+
+/* One complex selector (no top-level comma): broad when no compound in it,
+ * ancestors included, is specific. `body *` and `html > body` are broad;
+ * `.sidebar *` is not. */
+function PE_partIsBroad(part) {
+  const compounds = PE_splitTopLevel(part, (c) => /[\s>+~]/.test(c)).filter((c) => c.trim());
+  if (compounds.length === 0) return true;
+  return !compounds.some(PE_compoundIsSpecific);
+}
+
+function PE_isTooBroad(selector) {
+  try {
+    if (typeof selector !== 'string') return true;
+    return PE_splitTopLevel(selector, (c) => c === ',').some((part) => PE_partIsBroad(part));
+  } catch (err) {
+    return true;
+  }
+}
+
 /* ─── Rule Sharing Codes ───────────────────────────────────
  * "Copy Rules as Code" turns the rules of one site into a single line of text
  * that can be sent in a chat or an email; "Import from Code" reads it back.
@@ -171,8 +318,7 @@ function PE_normalizeRules(list) {
 const PE_SHARE_PREFIX = 'pageeraser:1:';
 const PE_SHARE_MAX_CHARS = 200000;
 const PE_SHARE_MAX_RULES = 500;
-// A code is not allowed to carry a rule that hides the whole page.
-const PE_SHARE_TOO_BROAD = new Set(['*', 'html', 'body', 'head', ':root', 'html > body', 'html body']);
+// A code is not allowed to carry a rule that hides the whole page: see PE_isTooBroad.
 // What chat apps put around a pasted code: quotes, brackets, a full stop.
 const PE_SHARE_WRAP_START = new Set(['`', '"', "'", '\u201c', '\u201d', '\u2018', '\u2019', '<', '(', '[']);
 const PE_SHARE_WRAP_END = new Set(['`', '"', "'", '\u201c', '\u201d', '\u2018', '\u2019', '>', ')', ']', '.', ',', ';', ':', '!']);
@@ -259,8 +405,7 @@ function PE_parseShare(text) {
     if (item.a !== undefined && item.a !== 'hide' && item.a !== 'stretch') continue;
     if (item.s.length > PE_SELECTOR_MAX_LENGTH * 2) continue; // before any pattern work on it
     const selector = item.s.trim();
-    const shape = selector.toLowerCase().replace(/\s*>\s*/g, ' > ').replace(/\s+/g, ' ');
-    if (PE_SHARE_TOO_BROAD.has(shape)) continue;
+    if (PE_isTooBroad(selector)) continue;
     candidates.push({ selector, action: item.a === 'stretch' ? 'stretch' : 'hide', imported: true });
   }
   const rules = PE_normalizeRules(candidates);

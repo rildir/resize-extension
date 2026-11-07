@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PageEraser",
   "description": "Erase any element from any page, X-Ray layouts, extract components to code, overlay designs. All local, no tracking.",
-  "version": "1.11.0",
+  "version": "1.11.1",
   "minimum_chrome_version": "102",
   "icons": {
     "16": "icons/icon16.png",

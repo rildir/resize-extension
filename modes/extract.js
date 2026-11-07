@@ -400,7 +400,7 @@ function PE_createExtractMode(host) {
         empty: 'Click an element on the page to extract it. ↑ ↓ pick its parent or child, Esc closes.',
         noStyles: 'No styles differ from the browser defaults.', noTokens: 'No fonts or colors found.',
         failed: 'Extraction failed',
-        stats: (s) => `${s.label} · ${s.shown} elements · ${s.rules} rules · ${s.fonts} fonts · ${s.colors} colors`,
+        stats: (s) => `${s.label} · ${s.shown} ${s.shown === 1 ? 'element' : 'elements'} · ${s.rules} ${s.rules === 1 ? 'rule' : 'rules'} · ${s.fonts} ${s.fonts === 1 ? 'font' : 'fonts'} · ${s.colors} ${s.colors === 1 ? 'color' : 'colors'}`,
         truncated: (total, max) => `⚠ The subtree has ${total} elements; only the first ${max} were processed.`
       });
 

@@ -14,7 +14,7 @@
  * The design is drawn on a <canvas> from a decoded bitmap, not shown through an
  * <img>: it never goes through the page's image-loading rules, so a strict
  * Content-Security-Policy cannot block it. It lives in memory and, per site, in
- * chrome.storage.local (at most 5 MB). It is never sent anywhere.
+ * chrome.storage.local (images up to about 3.5 MB). It is never sent anywhere.
  *
  * Page elements are only measured. Leaving the mode removes every node, listener
  * and timer this file created. The pure logic is in modes/diff-core.js.
@@ -25,6 +25,9 @@ const PE_DIFF_HEAT_ID = 'pe-diff-heat';
 const PE_DIFF_DIVIDER_ID = 'pe-diff-divider';
 const PE_DIFF_TOOLBAR_ID = 'pe-diff-toolbar';
 const PE_DIFF_SAVE_DELAY = 300;
+// The remembered design image shares chrome.storage.local's 10 MB with the rules;
+// this much is always left free so the image can never crowd them out.
+const PE_DIFF_RULES_RESERVE = 1024 * 1024;
 
 function PE_createDiffMode(host) {
   const siteKey = () => (location.hostname || 'page');
@@ -62,7 +65,8 @@ function PE_createDiffMode(host) {
         outOfView: 'Tasarım görünür alanda değil: kaydırın veya görseli sayfanın görünen kısmına taşıyın.',
         needGesture: 'Karşılaştırma için PageEraser\'ı araç çubuğu düğmesi, kısayol veya sağ tık menüsünden başlatın.',
         failed: 'Karşılaştırılamadı',
-        notStored: 'Bu görsel hatırlanamadı (en çok 5 MB saklanır); bu sayfadan çıkana kadar kullanılabilir.',
+        notStored: 'Bu görsel hatırlanamadı (yaklaşık 3,5 MB\'a kadar olan görseller saklanır); bu sayfadan çıkana kadar kullanılabilir.',
+        lowSpace: 'Bu görsel hatırlanamadı: tarayıcı depolaması neredeyse dolu (kurallarınıza yer bırakılıyor); bu sayfadan çıkana kadar kullanılabilir.',
         storeFailed: 'Görsel saklanamadı; bu sayfadan çıkana kadar kullanılabilir.',
         badType: 'Yalnızca PNG, JPG veya WebP kabul edilir.',
         badSize: 'Dosya çok büyük (en çok 25 MB).',
@@ -83,7 +87,8 @@ function PE_createDiffMode(host) {
         outOfView: 'The design is not in view: scroll, or move it onto the visible part of the page.',
         needGesture: 'To compare, start PageEraser from the toolbar button, a shortcut or the right-click menu.',
         failed: 'Compare failed',
-        notStored: 'This image will not be remembered (at most 5 MB is stored); it works until you leave the page.',
+        notStored: 'This image will not be remembered (images up to about 3.5 MB are stored); it works until you leave the page.',
+        lowSpace: 'This image will not be remembered: browser storage is nearly full (room is kept for your rules); it works until you leave the page.',
         storeFailed: 'The image could not be stored; it works until you leave the page.',
         badType: 'Only PNG, JPG or WebP images are accepted.',
         badSize: 'The file is too large (25 MB at most).',
@@ -270,8 +275,15 @@ function PE_createDiffMode(host) {
 
     if (!stored) {
       if (info.dataUrl.length <= PE_DIFF_MAX_STORED_CHARS) {
-        const ok = await host._saveSetting(imageKey(), { name: info.name, size: info.size, type: info.type, dataUrl: info.dataUrl });
-        if (session === mine && !ok) setNote(T().storeFailed);
+        // Drop the old image first (it is being replaced), then see what is left.
+        await host._removeSetting(imageKey());
+        const room = await host._storageHeadroom();
+        if (room < info.dataUrl.length + PE_DIFF_RULES_RESERVE) {
+          if (session === mine) setNote(T().lowSpace);
+        } else {
+          const ok = await host._saveSetting(imageKey(), { name: info.name, size: info.size, type: info.type, dataUrl: info.dataUrl });
+          if (session === mine && !ok) setNote(T().storeFailed);
+        }
       } else {
         // Do not leave an older image behind that would come back instead.
         await host._removeSetting(imageKey());

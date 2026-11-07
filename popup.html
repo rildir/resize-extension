@@ -13,17 +13,17 @@
         <div class="title-bar-text">PageEraser.exe</div>
         <div class="title-bar-controls">
           <button
-            aria-label="Minimize"
+            aria-label="Minimize" data-i18n-aria-label="minimizeAria"
             class="win-btn-control minimize-btn"
             type="button"
           ></button>
           <button
-            aria-label="Maximize"
+            aria-label="Maximize" data-i18n-aria-label="maximizeAria"
             class="win-btn-control maximize-btn"
             type="button"
           ></button>
           <button
-            aria-label="Close"
+            aria-label="Close" data-i18n-aria-label="closeAria"
             class="win-btn-control close-btn"
             type="button"
           ></button>
@@ -31,21 +31,21 @@
       </div>
 
       <!-- Menu Bar with Dropdowns -->
-      <div class="menu-bar">
-        <div class="menu-item-container">
-          <div class="menu-item" id="menu-file" data-i18n="fileMenu">
+      <div class="menu-bar" role="menubar">
+        <div class="menu-item-container" role="none">
+          <div class="menu-item" id="menu-file" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="dropdown-file" data-i18n="fileMenu">
             <span class="underline">F</span>ile
           </div>
-          <div class="dropdown-menu" id="dropdown-file">
+          <div class="dropdown-menu" id="dropdown-file" role="menu" aria-labelledby="menu-file">
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-export"
               data-i18n="exportRules"
             >
               Export Rules...
             </div>
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-import"
               data-i18n="importRules"
             >
@@ -53,118 +53,118 @@
             </div>
             <div class="dropdown-divider"></div>
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-copycode"
               data-i18n="copyCodeMenu"
             >
               Copy Rules as Code
             </div>
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-importcode"
               data-i18n="importCodeMenu"
             >
               Import from Code...
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item" id="menu-item-exit" data-i18n="exit">
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-exit" data-i18n="exit">
               Exit
             </div>
           </div>
         </div>
-        <div class="menu-item-container">
-          <div class="menu-item" id="menu-actions" data-i18n="actionsMenu">
+        <div class="menu-item-container" role="none">
+          <div class="menu-item" id="menu-actions" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="dropdown-actions" data-i18n="actionsMenu">
             <span class="underline">A</span>ctions
           </div>
-          <div class="dropdown-menu" id="dropdown-actions">
-            <div class="dropdown-item" id="menu-item-select">
+          <div class="dropdown-menu" id="dropdown-actions" role="menu" aria-labelledby="menu-actions">
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-select">
               <span data-i18n="startSelection">Start Selection</span>
               <span class="menu-shortcut">Alt+Shift+E</span>
             </div>
-            <div class="dropdown-item" id="menu-item-reset">
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-reset">
               <span data-i18n="restoreLayout">Restore All Layout</span>
               <span class="menu-shortcut">Alt+Shift+D</span>
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item" id="menu-item-paint">
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-paint">
               <span data-i18n="paintWebpage">Paint Webpage</span>
               <span class="menu-shortcut">Alt+Shift+W</span>
             </div>
-            <div class="dropdown-item" id="menu-item-xray">
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-xray">
               <span data-i18n="xrayBtn">Layout X-Ray</span>
               <span class="menu-shortcut">Alt+Shift+X</span>
             </div>
-            <div class="dropdown-item" id="menu-item-extract">
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-extract">
               <span data-i18n="extractBtn">Extract to Code</span>
               <span class="menu-shortcut">Alt+Shift+C</span>
             </div>
-            <div class="dropdown-item" id="menu-item-diff">
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-diff">
               <span data-i18n="diffBtn">Visual Diff</span>
               <span class="menu-shortcut">Alt+Shift+V</span>
             </div>
           </div>
         </div>
-        <div class="menu-item-container">
-          <div class="menu-item" id="menu-options" data-i18n="optionsMenu">
+        <div class="menu-item-container" role="none">
+          <div class="menu-item" id="menu-options" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="dropdown-options" data-i18n="optionsMenu">
             <span class="underline">O</span>ptions
           </div>
-          <div class="dropdown-menu" id="dropdown-options">
-            <div class="dropdown-item checkable checked" id="menu-item-sounds">
+          <div class="dropdown-menu" id="dropdown-options" role="menu" aria-labelledby="menu-options">
+            <div class="dropdown-item checkable checked" role="menuitemcheckbox" aria-checked="true" tabindex="-1" id="menu-item-sounds">
               <span class="check-mark">✓</span>
               <span data-i18n="playSounds">Play Retro Sounds</span>
             </div>
             <div
-              class="dropdown-item checkable checked"
+              class="dropdown-item checkable checked" role="menuitemcheckbox" aria-checked="true" tabindex="-1"
               id="menu-item-clippy-toggle"
             >
               <span class="check-mark">✓</span>
               <span data-i18n="showClippy">Show Clippy Buddy</span>
             </div>
-            <div class="dropdown-item checkable" id="menu-item-scope">
+            <div class="dropdown-item checkable" role="menuitemcheckbox" aria-checked="false" tabindex="-1" id="menu-item-scope">
               <span class="check-mark">✓</span>
               <span data-i18n="allSubdomains">Apply to Subdomains</span>
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item checkable" id="menu-item-theme-teal">
+            <div class="dropdown-item checkable" role="menuitemradio" aria-checked="false" tabindex="-1" id="menu-item-theme-teal">
               <span class="check-mark">✓</span>
               <span data-i18n="classicTeal">Classic Teal</span>
             </div>
-            <div class="dropdown-item checkable" id="menu-item-theme-blue">
+            <div class="dropdown-item checkable" role="menuitemradio" aria-checked="false" tabindex="-1" id="menu-item-theme-blue">
               <span class="check-mark">✓</span>
               <span data-i18n="classicBlue">Classic Blue</span>
             </div>
-            <div class="dropdown-item checkable" id="menu-item-theme-plum">
+            <div class="dropdown-item checkable" role="menuitemradio" aria-checked="false" tabindex="-1" id="menu-item-theme-plum">
               <span class="check-mark">✓</span>
               <span data-i18n="plumTheme">Plum Theme</span>
             </div>
-            <div class="dropdown-item checkable" id="menu-item-contrast-high">
+            <div class="dropdown-item checkable" role="menuitemcheckbox" aria-checked="false" tabindex="-1" id="menu-item-contrast-high">
               <span class="check-mark">✓</span>
               <span data-i18n="contrastHigh">High Contrast</span>
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item checkable" id="menu-item-text-large">
+            <div class="dropdown-item checkable" role="menuitemcheckbox" aria-checked="false" tabindex="-1" id="menu-item-text-large">
               <span class="check-mark">✓</span>
               <span data-i18n="textLarge">Large Text</span>
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item checkable" id="menu-item-lang-en">
+            <div class="dropdown-item checkable" role="menuitemradio" aria-checked="false" tabindex="-1" id="menu-item-lang-en">
               <span class="check-mark">✓</span> English
             </div>
-            <div class="dropdown-item checkable" id="menu-item-lang-tr">
+            <div class="dropdown-item checkable" role="menuitemradio" aria-checked="false" tabindex="-1" id="menu-item-lang-tr">
               <span class="check-mark">✓</span> Türkçe
             </div>
           </div>
         </div>
-        <div class="menu-item-container">
-          <div class="menu-item" id="menu-help" data-i18n="helpMenu">
+        <div class="menu-item-container" role="none">
+          <div class="menu-item" id="menu-help" role="menuitem" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="dropdown-help" data-i18n="helpMenu">
             <span class="underline">H</span>elp
           </div>
-          <div class="dropdown-menu" id="dropdown-help">
-            <div class="dropdown-item" id="menu-item-tour" data-i18n="takeTour">
+          <div class="dropdown-menu" id="dropdown-help" role="menu" aria-labelledby="menu-help">
+            <div class="dropdown-item" role="menuitem" tabindex="-1" id="menu-item-tour" data-i18n="takeTour">
               Take Guided Tour...
             </div>
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-clippy-trigger"
               data-i18n="askClippy"
             >
@@ -172,7 +172,7 @@
             </div>
             <div class="dropdown-divider"></div>
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-soundboard"
               data-i18n="soundboardMenu"
             >
@@ -180,7 +180,7 @@
             </div>
             <div class="dropdown-divider"></div>
             <div
-              class="dropdown-item"
+              class="dropdown-item" role="menuitem" tabindex="-1"
               id="menu-item-about"
               data-i18n="aboutPageEraser"
             >
@@ -306,6 +306,7 @@
             id="recycle-bin-container"
             class="win-recycle-bin"
             title="Drag elements here to restore them, or double-click to restore all"
+            data-i18n-title="recycleBinHint"
           >
             <div class="recycle-bin-icon empty" id="recycle-bin-icon">
               <svg
@@ -354,7 +355,7 @@
           <div class="shortcut-row">
             <span class="key-label">↓</span>
             <span class="key-desc" data-i18n="selectChild"
-              >Select Child Element</span
+              >Select Next Element Down</span
             >
           </div>
           <div class="shortcut-row">
@@ -444,14 +445,14 @@
 
     <!-- Modal Dialog (About PageEraser) -->
     <div class="win-modal-overlay" id="about-overlay" style="display: none">
-      <div class="win-modal">
+      <div class="win-modal" role="dialog" aria-modal="true" aria-labelledby="about-title">
         <div class="title-bar">
-          <div class="title-bar-text" data-i18n="aboutTitle">
+          <div class="title-bar-text" id="about-title" data-i18n="aboutTitle">
             About PageEraser
           </div>
           <div class="title-bar-controls">
             <button
-              aria-label="Close"
+              aria-label="Close" data-i18n-aria-label="closeAria"
               class="win-btn-control close-btn"
               id="btn-close-about"
               type="button"
@@ -562,7 +563,7 @@
           </div>
           <div class="title-bar-controls">
             <button
-              aria-label="Close"
+              aria-label="Close" data-i18n-aria-label="closeAria"
               class="win-btn-control close-btn"
               id="btn-close-code"
               type="button"
@@ -635,7 +636,7 @@
           <div class="title-bar-text" id="alert-title">PageEraser</div>
           <div class="title-bar-controls">
             <button
-              aria-label="Close"
+              aria-label="Close" data-i18n-aria-label="closeAria"
               class="win-btn-control close-btn"
               id="btn-close-alert"
               type="button"
@@ -699,7 +700,7 @@
           <div class="title-bar-text" id="confirm-title">PageEraser</div>
           <div class="title-bar-controls">
             <button
-              aria-label="Close"
+              aria-label="Close" data-i18n-aria-label="closeAria"
               class="win-btn-control close-btn"
               id="btn-close-confirm"
               type="button"
@@ -765,12 +766,12 @@
       id="minesweeper-overlay"
       style="display: none"
     >
-      <div class="win-modal" style="width: 162px">
+      <div class="win-modal" style="width: 162px" role="dialog" aria-modal="true" aria-labelledby="minesweeper-title">
         <div class="title-bar">
-          <div class="title-bar-text">Minesweeper</div>
+          <div class="title-bar-text" id="minesweeper-title">Minesweeper</div>
           <div class="title-bar-controls">
             <button
-              aria-label="Close"
+              aria-label="Close" data-i18n-aria-label="closeAria"
               class="win-btn-control close-btn"
               id="btn-close-minesweeper"
               type="button"
@@ -827,16 +828,16 @@
 
     <!-- Soundboard Dialog (Multimedia Control) -->
     <div id="overlay-soundboard" class="win-overlay" style="display: none">
-      <div class="window win-modal" id="modal-soundboard" style="width: 320px">
+      <div class="window win-modal" id="modal-soundboard" style="width: 320px" role="dialog" aria-modal="true" aria-labelledby="soundboard-title">
         <div class="title-bar">
-          <div class="title-bar-text" data-i18n="soundboardTitle">
+          <div class="title-bar-text" id="soundboard-title" data-i18n="soundboardTitle">
             Sound Properties
           </div>
           <div class="title-bar-controls">
             <button
               class="win-btn-control close-btn"
               id="btn-close-soundboard"
-              aria-label="Close"
+              aria-label="Close" data-i18n-aria-label="closeAria"
             ></button>
           </div>
         </div>
