@@ -1544,6 +1544,22 @@ console.log('RC5 bug-hunt fixes');
   check('the ↓ shortcut is described as what it does (next element), in the page, the locale tables and both languages',
     [popupHtml.includes('>Select Next Element Down</span'), LOC.en.selectChild, LOC.tr.selectChild, popupHtml.includes('Select Child Element')],
     [true, 'Select Next Element Down', 'Aşağıdaki Sonraki Elementi Seç', false]);
+
+  /* The GitHub Pages landing page (index.html) — not part of the extension package */
+  const siteHtml = read('index.html');
+  const siteFiles = [...siteHtml.matchAll(/(?:src|href|poster)="((?:assets\/|privacy-policy\.html)[^"]*)"/g)].map((m) => m[1]);
+  check('index.html (landing page): every local file it points at exists',
+    [siteFiles.length > 10, siteFiles.filter((f) => !fs.existsSync(path.join(ROOT, f))).length], [true, 0]);
+  check('index.html: title, description, canonical, social image and Web Store link are set; no invented ratings',
+    [/<title>[^<]*PageEraser[^<]*<\/title>/.test(siteHtml), /<meta name="description" content="[^"]{60,170}"/.test(siteHtml),
+     siteHtml.includes('<link rel="canonical" href="https://rildir.github.io/resize-extension/">'),
+     siteHtml.includes('property="og:image" content="https://rildir.github.io/resize-extension/assets/og.png"'),
+     siteHtml.includes('https://chromewebstore.google.com/detail/maiancbfenacpjnekhdeakfbacoalkid'), /aggregateRating/.test(siteHtml)],
+    [true, true, true, true, true, false]);
+  const sitePerms = [...siteHtml.matchAll(/<tr><td><code>([A-Za-z]+)<\/code><\/td>/g)].map((m) => m[1]).sort();
+  check('index.html lists exactly the permissions in manifest.json', sitePerms, JSON.parse(read('manifest.json')).permissions.slice().sort());
+  check('index.html and its assets are not shipped in the extension package (build.ps1)',
+    [/index\.html|assets[\\/]/.test(read('build.ps1'))], [false]);
 })();
 
 /* ─── Result ─────────────────────────────────────────────── */

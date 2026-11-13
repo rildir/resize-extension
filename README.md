@@ -9,16 +9,52 @@
 **Interactively select and permanently remove any element from any webpage.**
 
 [![CI](https://github.com/rildir/resize-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/rildir/resize-extension/actions/workflows/ci.yml)
-[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/maiancbfenacpjnekhdeakfbacoalkid)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-00C853?style=for-the-badge&logo=googlechrome&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
 [![Version](https://img.shields.io/badge/Version-1.11.1-FF4757?style=for-the-badge)]()
 
 *A Chrome/Edge extension wrapped in a nostalgic Windows 95 aesthetic — because cleaning up the web should be fun.*
 
-[Features](#-features) · [Installation](#-installation) · [Usage](#-usage) · [Keyboard Shortcuts](#-keyboard-shortcuts) · [Architecture](docs/ARCHITECTURE.md) · [Changelog](CHANGELOG.md) · [Contributing](#-contributing)
+[Website](https://rildir.github.io/resize-extension/) · [Features](#-features) · [Installation](#-installation) · [Usage](#-usage) · [Keyboard Shortcuts](#-keyboard-shortcuts) · [Architecture](docs/ARCHITECTURE.md) · [Changelog](CHANGELOG.md) · [Contributing](#-contributing)
 
 </div>
+
+---
+
+## 🎬 Demo
+
+<div align="center">
+
+<img src="assets/demo-erase.gif" alt="Clicking a cookie bar and a sidebar erases them, and they stay hidden after a reload" width="700" />
+
+<br />
+<em>Erase it once, it stays erased, even after a reload.</em>
+
+</div>
+
+<details>
+<summary><strong>More demos: Layout X-Ray and Visual Diff</strong></summary>
+
+<br />
+
+<div align="center">
+
+<img src="assets/demo-xray.gif" alt="Layout X-Ray drawing colour-coded boxes over a page, then reducing the depth from 4 to 2" width="700" />
+
+<em>Layout X-Ray: flex, grid and block boxes, margin and padding, and a depth slider.</em>
+
+<br /><br />
+
+<img src="assets/demo-diff.gif" alt="A design image overlaid on a page, then Compare marking the one shifted card in red" width="700" />
+
+<em>Visual Diff: overlay a design, drag the before/after divider, Compare.</em>
+
+</div>
+
+</details>
+
+More on the [project website](https://rildir.github.io/resize-extension/).
 
 ---
 
