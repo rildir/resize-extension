@@ -376,7 +376,7 @@ harness loading the unpacked extension is the obvious next step.
 ## 9. Packaging
 
 `build.ps1` ships an **explicit allowlist**, not the repository. `test.html`,
-`mock-chrome.js`, `screenshots/`, `docs/`, `tests/` and the README stay out:
+`mock-chrome.js`, `index.html`, `assets/`, `docs/`, `tests/` and the README stay out:
 every extra file in the upload is one more thing a store reviewer has to read
 and rule out, and `mock-chrome.js` in particular is a stub `chrome` object that
 looks exactly like something worth investigating.
